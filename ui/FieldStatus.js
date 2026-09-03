@@ -3,9 +3,13 @@ export function showFieldStatus(
   status,
   message = ''
 ) {
+  if (!field) {
+    return null;
+  }
+
   field
     .querySelector(
-      '.smq-data-editor-status'
+      ':scope > .smq-data-editor-status'
     )
     ?.remove();
 
@@ -15,14 +19,30 @@ export function showFieldStatus(
   statusElement.className =
     `smq-data-editor-status smq-data-editor-status-${status}`;
 
-  statusElement.textContent =
-    status === 'saved'
-      ? '✓ Saved'
-      : status === 'saving'
-        ? 'Saving...'
-        : message || 'Unable to save';
+  statusElement.setAttribute(
+    'role',
+    'status'
+  );
 
-  field.appendChild(statusElement);
+  statusElement.setAttribute(
+    'aria-live',
+    'polite'
+  );
+
+  if (status === 'saving') {
+    statusElement.textContent =
+      'Saving...';
+  } else if (status === 'saved') {
+    statusElement.textContent =
+      '✓ Saved';
+  } else {
+    statusElement.textContent =
+      message || 'Unable to save';
+  }
+
+  field.appendChild(
+    statusElement
+  );
 
   return statusElement;
 }

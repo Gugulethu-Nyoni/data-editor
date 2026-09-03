@@ -1,0 +1,471 @@
+# @semantq/data-editor
+
+## Purpose
+
+`@semantq/data-editor` is a lightweight, framework-agnostic DOM editing layer for Semantq applications.
+
+Its purpose is to make persisted application data editable directly where that data is rendered, without requiring the developer to manually implement field editors, API mutation calls, validation wiring, saving states, or deletion interactions for every UI element.
+
+The module is intentionally independent of AnyGrid. AnyGrid remains responsible for editing within the grid itself. `@semantq/data-editor` is responsible for editable UI elements outside the grid, including custom Semantq components, profile views, dashboards, cards, lists, detail pages, and other arbitrary HTML structures.
+
+The fundamental contract is:
+
+```html
+<span
+  class="smq-data-editable"
+  data-model="Resident"
+  data-record-id="resident-uuid"
+  data-field="firstName"
+>
+  John
+</span>
+```
+
+The DOM identifies **what persisted data the element represents**. Metadata determines **what the data is and how it should be edited**.
+
+## Architectural Principle
+
+The architecture deliberately separates three responsibilities:
+
+```text
+Semantq Component
+        │
+        │ fetches data
+        │ owns state
+        │ renders HTML
+        │ owns CSS/UI
+        │
+        ▼
+Rendered DOM
+        │
+        │ .smq-data-editable
+        ▼
+@semantq/data-editor
+        │
+        │ resolves metadata
+        │ selects editor
+        │ handles edit/delete
+        │ validates input
+        │ shows status
+        │
+        ▼
+smQL adapter
+        │
+        │ PUT / DELETE
+        ▼
+SemantqQL backend
+```
+
+### Semantq Component
+
+The Semantq component remains the owner of application presentation and application state.
+
+It is responsible for:
+
+* fetching the initial data;
+* holding data in `$state` or another state mechanism;
+* using `$effect`, `$derived`, and other Semantq primitives where appropriate;
+* rendering the HTML structure;
+* deciding how the data is visually presented;
+* controlling component-specific CSS;
+* implementing business and page-level behaviour.
+
+`@semantq/data-editor` does not take ownership of these concerns.
+
+### @semantq/data-editor
+
+The Data Editor operates on already-rendered DOM.
+
+It is responsible for:
+
+* discovering `.smq-data-editable` elements;
+* resolving `data-model`, `data-record-id`, and `data-field`;
+* resolving TypeCaster/editor metadata;
+* selecting the appropriate editor;
+* rendering the temporary editing control;
+* handling keyboard and focus interactions;
+* validating editor values;
+* invoking update or delete operations;
+* displaying `Saving`, `Saved`, and `Error` states;
+* notifying the consuming application after successful mutations.
+
+It must remain usable in plain JavaScript and must not depend on Semantq `$state`, `$effect`, or other reactive primitives.
+
+Semantq reactivity is therefore **hookable, not embedded**.
+
+### smQL
+
+smQL remains the API abstraction.
+
+The Data Editor does not create a second HTTP abstraction or duplicate smQL functionality. It communicates through `smQLAdapter`, which delegates mutations to the existing smQL client.
+
+```text
+DataEditor
+    ↓
+MutationManager
+    ↓
+smQLAdapter
+    ↓
+smQL
+    ↓
+API
+```
+
+The adapter is responsible for mapping:
+
+```text
+model + recordId + field + value
+```
+
+to the appropriate application endpoint and request.
+
+## Metadata-Driven Editing
+
+The Data Editor does not infer the complete schema from the DOM.
+
+The element provides identity:
+
+```text
+model
+recordId
+field
+```
+
+Metadata provides meaning.
+
+For example:
+
+```js
+{
+  field: 'age',
+  type: 'Int',
+  editor: 'number',
+  required: false,
+  nullable: true,
+  minimum: 0,
+  maximum: 150,
+  step: 1
+}
+```
+
+The resolver therefore produces:
+
+```text
+Resident.age
+      ↓
+Int
+      ↓
+NumberEditor
+```
+
+This prevents schema information from being duplicated across HTML attributes.
+
+The preferred DOM contract therefore remains deliberately small:
+
+```html
+class="smq-data-editable"
+data-model="Resident"
+data-record-id="resident-uuid"
+data-field="age"
+```
+
+## Supported Data Types
+
+The editor registry supports the standard TypeCaster/Prisma semantic types:
+
+```text
+String
+Int
+BigInt
+Float
+Decimal
+Boolean
+DateTime
+Json
+Bytes
+Enum
+```
+
+The registry maps these semantic types to appropriate editors.
+
+`Int`, `Float`, and `Decimal` may share the underlying numeric editor implementation while retaining their distinct metadata semantics.
+
+## Structured Data
+
+Structured values are treated separately from scalar values.
+
+The first implementation supports:
+
+### Comma-separated values
+
+```text
+Playing, Eating, Walking
+```
+
+Metadata describes the item editor:
+
+```js
+{
+  editor: 'textarea',
+  structure: {
+    type: 'comma-separated-values',
+    item: {
+      editor: 'text'
+    }
+  }
+}
+```
+
+The editor converts the simple UI representation into:
+
+```js
+['Playing', 'Eating', 'Walking']
+```
+
+### Predefined key/value pairs
+
+For structures whose keys are known in advance:
+
+```text
+Email:    [____________]
+Mobile:   [____________]
+Website:  [____________]
+```
+
+Metadata defines each key and its optional editor/validation specification.
+
+### Custom key/value repeater
+
+For user-defined structures:
+
+```text
+Key       Value
+[_____]   [___________]
+[_____]   [___________]
+[_____]   [___________]
+
++ Add item
+```
+
+Both key and value default to text unless metadata specifies another editor.
+
+This provides a simple first-generation solution for variable JSON structures without forcing users to type JSON syntax.
+
+## Relations
+
+Relations remain distinct from scalar fields.
+
+Metadata may describe:
+
+```js
+relations: {
+  organization: {
+    model: 'Resident',
+    field: 'organization',
+    modelName: 'Organization',
+    collection: false
+  },
+
+  carePlans: {
+    model: 'Resident',
+    field: 'carePlans',
+    modelName: 'CarePlan',
+    collection: true
+  }
+}
+```
+
+A relation descriptor describes the structural relationship. It does not imply that related records were fetched.
+
+The actual API response determines whether nested relation data exists.
+
+This allows a component to render an actual related record using its own identity:
+
+```html
+<span
+  class="smq-data-editable"
+  data-model="CarePlan"
+  data-record-id="careplan-001"
+  data-field="status"
+>
+  ACTIVE
+</span>
+```
+
+This is preferable to representing nested mutations as paths such as `carePlans.status`, because the rendered element identifies the actual persisted record.
+
+## State Synchronisation
+
+The Data Editor does not own application state.
+
+After a successful mutation it emits a normalized mutation event:
+
+```js
+{
+  action: 'update',
+  model: 'Resident',
+  recordId: 'resident-001',
+  field: 'firstName',
+  value: 'Linda-Marie',
+  response
+}
+```
+
+A Semantq component can consume that event and update its reactive state:
+
+```js
+onUpdated: ({ field, value }) => {
+  resident[field] = value;
+}
+```
+
+Semantq then performs the normal reactive render.
+
+For collection-level mutations, the component may instead invalidate or refresh its collection using `$effect`.
+
+This gives us two appropriate patterns:
+
+```text
+Element update
+PUT
+↓
+onUpdated
+↓
+update local $state
+↓
+reactive render
+```
+
+and:
+
+```text
+Collection mutation
+POST / DELETE
+↓
+invalidate collection
+↓
+$effect
+↓
+refetch
+↓
+rerender collection
+```
+
+The Data Editor does not need to know which reactive system is being used.
+
+## Deletion
+
+Deletion must not be treated as equivalent to clearing an arbitrary scalar field.
+
+The architecture distinguishes:
+
+```text
+update field
+clear nullable field
+delete record
+remove array item
+remove JSON property
+disconnect relation
+```
+
+Not all of these are implemented in the first version.
+
+In particular, a required scalar such as:
+
+```text
+name: John
+```
+
+should generally not expose a destructive "delete field" operation. Clearing a nullable field and deleting a persisted record are different operations.
+
+This distinction will become increasingly important for arrays, JSON structures, and relations.
+
+## Configuration
+
+The parent component may provide a `themeColor` to the Data Editor.
+
+The module uses neutral, restrained styling by default and exposes the theme color through CSS custom properties.
+
+The Data Editor should be visually usable out of the box without imposing an application's colour scheme, typography, layout, or component design.
+
+The parent component remains responsible for its broader presentation.
+
+## Independence From AnyGrid
+
+AnyGrid and Data Editor are intentionally separate systems.
+
+```text
+AnyGrid
+└── editing within grid context
+
+@semantq/data-editor
+└── editing arbitrary DOM elements
+```
+
+They may coexist on the same page and even within the same component without sharing class names, state, editor lifecycle, or mutation implementation.
+
+AnyGrid's internal editing system remains unchanged.
+
+Data Editor operates exclusively on its own:
+
+```text
+.smq-data-editable
+.smq-data-editor-*
+```
+
+namespace.
+
+## Design Goal
+
+The central objective is to eliminate repetitive mutation boilerplate while preserving component ownership.
+
+A developer should be able to write:
+
+```html
+<span
+  class="smq-data-editable"
+  data-model="Product"
+  data-record-id="product-001"
+  data-field="name"
+>
+  Example Product
+</span>
+```
+
+and allow the platform to determine:
+
+```text
+what the field is
+        ↓
+which editor to use
+        ↓
+how to validate it
+        ↓
+how to persist it
+        ↓
+how to show mutation status
+```
+
+without requiring the developer to rebuild that infrastructure for each rendered component.
+
+The result is a small behavioural layer:
+
+```text
+TypeCaster
+   ↓
+metadata
+
+Semantq Component
+   ↓
+HTML + state
+
+Data Editor
+   ↓
+element-level editing
+
+smQL
+   ↓
+persistence
+```
+
+Each layer has one clear responsibility, and none of the layers needs to absorb the responsibilities of the others.

@@ -27,6 +27,19 @@ export default class EnumEditor extends BaseEditor {
       this.commit(select.value);
     });
 
+
+    select.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this.submit();
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.cancel();
+      }
+    });
+
     this.element = select;
     return select;
   }

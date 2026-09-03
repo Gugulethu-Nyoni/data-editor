@@ -36,8 +36,22 @@ export default class CommaSeparatedEditor extends BaseEditor {
       this.commit(values);
     };
 
-    textarea.addEventListener('change', commit);
-    textarea.addEventListener('blur', commit);
+    textarea.addEventListener('keydown', (event) => {
+      if (
+        event.key === 'Enter' &&
+        (event.ctrlKey || event.metaKey)
+      ) {
+        event.preventDefault();
+
+        commit();
+        this.submit();
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.cancel();
+      }
+    });
 
     this.element = textarea;
 

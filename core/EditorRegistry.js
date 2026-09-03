@@ -25,7 +25,16 @@ export default class EditorRegistry {
   }
 
   resolve(name) {
-    return this.editors.get(name) || null;
+    const editor =
+      this.editors.get(name) || null;
+
+    console.log(
+      '[EditorRegistry] resolve():',
+      name,
+      editor
+    );
+
+    return editor;
   }
 
   has(name) {

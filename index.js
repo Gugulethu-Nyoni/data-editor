@@ -1,3 +1,5 @@
+import './styles/data-editor.css';
+
 export { default as createDefaultRegistry } from './core/createDefaultRegistry.js';
 export { default as DataEditor } from './core/DataEditor.js';
 export { default as EditorRegistry } from './core/EditorRegistry.js';

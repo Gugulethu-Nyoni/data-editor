@@ -1,146 +1,657 @@
+/*
+ * Semantq DataEditor
+ *
+ * Neutral editor styling.
+ * The consuming application controls its own typography and colour system.
+ * DataEditor provides only the visual treatment required for editing.
+ */
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+.smq-data-editor-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ==========================================================================
+   Editable Value
+   ========================================================================== */
+
 .smq-data-editable {
-  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  transition: background 0.15s;
 }
 
 .smq-data-editable:hover {
+  background: #f3f4f6;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+/* Pencil is provided by the indicator button. */
+.smq-data-editable::after,
+.smq-data-editor-active::after {
+  display: none;
+}
+
+/* ==========================================================================
+   DataEditor Fields — Shared Baseline
+   ========================================================================== */
+
+.smq-data-editor-fields {
+  --smq-font: system-ui, -apple-system, sans-serif;
+  --smq-text: #1a1a1a;
+  --smq-muted: #6b7280;
+  --smq-border: #d1d5db;
+  --smq-focus: #6b7280;
+  --smq-radius: 6px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+
+  font-family: var(--smq-font);
+  font-size: 0.875rem;
+  color: var(--smq-text);
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   Generated Mode Fields
+   ========================================================================== */
+
+.smq-data-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.smq-data-editor-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--smq-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.smq-data-editor-value {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ==========================================================================
+   Targeted Mode Fields
+   ========================================================================== */
+
+/*
+ * Targeted mode is component-owned and uses:
+ *
+ *   [data-editor-container]
+ *     ├── .field
+ *     │     ├── label
+ *     │     ├── .smq-data-editable
+ *     │     └── .smq-data-editor-indicator
+ *     │
+ *     └── .relation-item
+ *           └── .field
+ *
+ * These rules intentionally support that DOM contract without requiring
+ * consuming components to adopt DataEditor's generated-mode class names.
+ */
+
+[data-editor-container] > .field,
+[data-editor-container] .relation-item > .field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+[data-editor-container] > .field > label,
+[data-editor-container] .relation-item > .field > label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ==========================================================================
+   Layout Variants
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Stacked
+   -------------------------------------------------------------------------- */
+
+/* Generated mode */
+.smq-data-editor-layout-stacked .smq-data-editor-field {
+  flex-direction: column;
+}
+
+/* Targeted mode */
+.smq-data-editor-layout-stacked > .field,
+.smq-data-editor-layout-stacked .relation-item > .field {
+  flex-direction: column;
+}
+
+/* --------------------------------------------------------------------------
+   Inline
+   -------------------------------------------------------------------------- */
+
+/* Generated mode */
+.smq-data-editor-layout-inline .smq-data-editor-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.smq-data-editor-layout-inline .smq-data-editor-label {
+  min-width: 120px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.smq-data-editor-layout-inline .smq-data-editor-value {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Targeted mode — core fields */
+.smq-data-editor-layout-inline > .field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Targeted mode — relation fields */
+.smq-data-editor-layout-inline .relation-item > .field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Targeted mode labels */
+.smq-data-editor-layout-inline > .field > label,
+.smq-data-editor-layout-inline .relation-item > .field > label {
+  min-width: 120px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+/* Targeted mode editable values */
+.smq-data-editor-layout-inline > .field > .smq-data-editable,
+.smq-data-editor-layout-inline .relation-item > .field > .smq-data-editable {
+  flex: 1;
+}
+
+/* Targeted mode edit indicators */
+.smq-data-editor-layout-inline > .field > .smq-data-editor-indicator,
+.smq-data-editor-layout-inline .relation-item > .field > .smq-data-editor-indicator {
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Edit Indicator
+   ========================================================================== */
+
+.smq-data-editor-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 24px;
+  height: 24px;
+  padding: 0;
+
+  font-size: 0.8rem;
+  line-height: 1;
+
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+
+  color: inherit;
+  opacity: 0.45;
+
+  cursor: pointer;
+
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
+}
+
+.smq-data-editor-indicator:hover {
+  opacity: 0.9;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.smq-data-editor-indicator:focus-visible {
+  outline: 2px solid var(
+    --smq-data-editor-focus,
+    color-mix(in srgb, currentColor 16%, transparent)
+  );
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Editor Controls
+   ========================================================================== */
+
+.smq-data-editor-active input,
+.smq-data-editor-active textarea,
+.smq-data-editor-active select {
+  box-sizing: border-box;
+  max-width: 100%;
+
+  font: inherit;
+  line-height: 1.4;
+  color: inherit;
+
+  background: inherit;
+
+  border: 1px solid color-mix(
+    in srgb,
+    currentColor 25%,
+    transparent
+  );
+
+  border-radius: 0.35rem;
+}
+
+/* --------------------------------------------------------------------------
+   Text-like Controls
+   -------------------------------------------------------------------------- */
+
+.smq-data-editor-active input:not(
+  [type="checkbox"]
+):not(
+  [type="radio"]
+):not(
+  [type="date"]
+):not(
+  [type="datetime-local"]
+):not(
+  [type="time"]
+):not(
+  [type="month"]
+):not(
+  [type="week"]
+):not(
+  [type="color"]
+) {
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+}
+
+/* --------------------------------------------------------------------------
+   Textarea
+   -------------------------------------------------------------------------- */
+
+.smq-data-editor-active textarea {
+  min-height: 4.5rem;
+  padding: 0.4rem 0.55rem;
+  resize: vertical;
+}
+
+/* --------------------------------------------------------------------------
+   Select
+   -------------------------------------------------------------------------- */
+
+.smq-data-editor-active select {
+  min-height: 2rem;
+  padding: 0.35rem 1.8rem 0.35rem 0.55rem;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Focus
+   ========================================================================== */
+
+.smq-data-editor-active input:focus,
+.smq-data-editor-active textarea:focus,
+.smq-data-editor-active select:focus {
+  outline: 2px solid var(
+    --smq-data-editor-focus,
+    color-mix(in srgb, currentColor 16%, transparent)
+  );
+
+  outline-offset: 1px;
+
+  border-color: var(
+    --smq-data-editor-accent,
+    currentColor
+  );
+}
+
+/* ==========================================================================
+   Checkboxes / Radios
+   ========================================================================== */
+
+.smq-data-editor-active input[type="checkbox"],
+.smq-data-editor-active input[type="radio"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0.2rem;
+
+  accent-color: var(
+    --smq-data-editor-accent,
+    currentColor
+  );
+
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Date / Time Controls
+   ========================================================================== */
+
+.smq-data-editor-active input[type="date"],
+.smq-data-editor-active input[type="datetime-local"],
+.smq-data-editor-active input[type="time"],
+.smq-data-editor-active input[type="month"],
+.smq-data-editor-active input[type="week"] {
+  min-width: 12rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.5rem;
+  box-sizing: border-box;
+}
+
+.smq-data-editor-active input[type="datetime-local"] {
+  min-width: 15rem;
+}
+
+.smq-data-editor-active
+  input[type="date"]::-webkit-calendar-picker-indicator,
+.smq-data-editor-active
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.smq-data-editor-active
+  input[type="time"]::-webkit-calendar-picker-indicator,
+.smq-data-editor-active
+  input[type="month"]::-webkit-calendar-picker-indicator,
+.smq-data-editor-active
+  input[type="week"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.smq-data-editor-active button {
+  box-sizing: border-box;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+
+  font: inherit;
+  line-height: 1.3;
+
+  border: 1px solid color-mix(
+    in srgb,
+    currentColor 22%,
+    transparent
+  );
+
+  border-radius: 0.35rem;
+
+  background: transparent;
+  color: inherit;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.smq-data-editor-active button:hover {
   background: color-mix(
     in srgb,
-    var(--smq-data-editor-accent, #64748b) 7%,
+    currentColor 7%,
+    transparent
+  );
+
+  border-color: color-mix(
+    in srgb,
+    currentColor 35%,
     transparent
   );
 }
 
-.smq-data-editor-input,
-.smq-data-editor-key-value input,
-.smq-data-editor-custom-key-value input,
-.smq-data-editor-key-value select,
-.smq-data-editor-custom-key-value select,
-.smq-data-editor-custom-key-value textarea,
-.smq-data-editor-key-value textarea {
-  width: 100%;
-  min-height: 38px;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border: 1px solid #d4d7dc;
-  border-radius: 7px;
-  background: #fff;
-  color: #252a31;
-  font: inherit;
+.smq-data-editor-active button:focus-visible {
+  outline: 2px solid var(
+    --smq-data-editor-focus,
+    color-mix(in srgb, currentColor 16%, transparent)
+  );
+
+  outline-offset: 1px;
 }
 
-.smq-data-editor-key-value,
-.smq-data-editor-custom-key-value {
-  display: grid;
-  gap: 10px;
-  width: 100%;
-}
-
-.smq-data-editor-key-value-row,
-.smq-data-editor-custom-key-value-row {
-  display: grid;
-  grid-template-columns: minmax(100px, 0.7fr) minmax(0, 1.8fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.smq-data-editor-custom-key-value-row {
-  grid-template-columns:
-    minmax(90px, 0.9fr)
-    minmax(90px, 1.5fr)
-    auto;
-}
-
-.smq-data-editor-key-value label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #525a63;
-}
-
-.smq-data-editor-key-value input:focus,
-.smq-data-editor-custom-key-value input:focus,
-.smq-data-editor-key-value select:focus,
-.smq-data-editor-custom-key-value select:focus,
-.smq-data-editor-input:focus {
-  outline: none;
-  border-color: var(--smq-data-editor-accent, #64748b);
-  box-shadow:
-    0 0 0 3px
-    var(--smq-data-editor-focus, rgba(100, 116, 139, 0.14));
-}
-
-.smq-data-editor-actions {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.smq-data-editor-actions button,
-.smq-data-editor-custom-key-value-row button {
-  min-height: 34px;
-  padding: 6px 10px;
-  border: 1px solid #d4d7dc;
-  border-radius: 6px;
-  background: #fff;
-  color: #3f4750;
-  font: inherit;
-  cursor: pointer;
-}
-
-.smq-data-editor-actions button:hover,
-.smq-data-editor-custom-key-value-row button:hover {
-  border-color: var(--smq-data-editor-accent, #64748b);
-  color: var(--smq-data-editor-accent, #64748b);
-}
+/* ==========================================================================
+   Status
+   ========================================================================== */
 
 .smq-data-editor-status {
   display: inline-flex;
   align-items: center;
-  margin-inline-start: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  gap: 0.25rem;
+
+  font-size: 0.7rem;
+  font-weight: 500;
+
+  margin-left: 0.3rem;
+
   white-space: nowrap;
+  opacity: 1;
+
+  transition: opacity 0.2s ease;
 }
 
 .smq-data-editor-status-saved {
-  color: #287a45;
+  color: #16a34a;
 }
 
 .smq-data-editor-status-saving {
-  color: #69717a;
+  color: #eab308;
 }
 
 .smq-data-editor-status-error {
-  color: #b43f3f;
+  color: #dc2626;
 }
 
-@media (max-width: 640px) {
-  .smq-data-editor-key-value-row,
+/* ==========================================================================
+   Custom Key-Value Repeater
+   ========================================================================== */
+
+.smq-data-editor-custom-key-value {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.smq-data-editor-custom-key-value-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.smq-data-editor-custom-key-value-row {
+  display: grid;
+
+  grid-template-columns:
+    minmax(8rem, 1fr)
+    minmax(10rem, 2fr)
+    auto;
+
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.smq-data-editor-custom-key-value-row input {
+  width: 100%;
+  min-width: 0;
+}
+
+.smq-data-editor-custom-key-value-row button {
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Editor Control / Help
+   ========================================================================== */
+
+.smq-data-editor-control {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  max-width: 100%;
+}
+
+.smq-data-editor-help {
+  font-size: 0.7rem;
+  line-height: 1.4;
+
+  color: #6b7280;
+
+  opacity: 0.7;
+
+  margin-top: 0.15rem;
+
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Delete Control
+   ========================================================================== */
+
+.smq-data-editor-delete {
+  margin-top: 0.75rem;
+  padding: 0.3rem 0.8rem;
+
+  font: inherit;
+  font-size: 0.8rem;
+
+  color: #dc2626;
+
+  background: transparent;
+
+  border: 1px solid #fca5a5;
+  border-radius: var(--smq-radius, 6px);
+
+  cursor: pointer;
+
+  transition: background 0.15s;
+}
+
+.smq-data-editor-delete:hover {
+  background: #fef2f2;
+}
+
+.smq-data-editor-delete:focus-visible {
+  outline: 2px solid color-mix(
+    in srgb,
+    #ef4444 30%,
+    transparent
+  );
+
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Disabled / Readonly
+   ========================================================================== */
+
+.smq-data-editor-active input:disabled,
+.smq-data-editor-active textarea:disabled,
+.smq-data-editor-active select:disabled,
+.smq-data-editor-active button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 600px) {
+
+  /* Inline generated fields */
+  .smq-data-editor-layout-inline .smq-data-editor-field {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+
+  .smq-data-editor-layout-inline .smq-data-editor-label {
+    min-width: unset;
+  }
+
+  .smq-data-editor-layout-inline .smq-data-editor-value {
+    flex: unset;
+  }
+
+  /* Inline targeted fields */
+  .smq-data-editor-layout-inline > .field,
+  .smq-data-editor-layout-inline .relation-item > .field {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+
+  .smq-data-editor-layout-inline > .field > label,
+  .smq-data-editor-layout-inline .relation-item > .field > label {
+    min-width: unset;
+  }
+
+  /* Custom key-value repeater */
   .smq-data-editor-custom-key-value-row {
     grid-template-columns: 1fr;
-    gap: 5px;
   }
 
-  .smq-data-editor-actions {
-    width: 100%;
-  }
-
-  .smq-data-editor-actions button {
-    flex: 1;
-  }
-
-  .smq-data-editor-status {
-    display: flex;
-    margin-inline-start: 0;
-    margin-block-start: 6px;
+  .smq-data-editor-custom-key-value-row button {
+    justify-self: start;
   }
 }
 
+/* ==========================================================================
+   Reduced Motion
+   ========================================================================== */
+
 @media (prefers-reduced-motion: reduce) {
+
+  .smq-data-editor-indicator,
+  .smq-data-editor-active button,
   .smq-data-editable {
+    transition: none;
+  }
+
+  .smq-data-editor-custom-key-value-row button {
     transition: none;
   }
 }

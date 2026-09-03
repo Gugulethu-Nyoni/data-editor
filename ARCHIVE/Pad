@@ -1,0 +1,40 @@
+
+
+for 
+comma seperated valus 
+
+editor should be textarea with comma seperated values
+
+then we have key value pairs with predefined keys e.g 
+
+email:______
+mobile: _____
+website: ______
+
+the metadata will have editor type and inlne validation (optional) specs for each field 
+
+then we custom key value pairs
+this is 
+key____ value: ___
+
+repater  of that (both are text unless metadata has other specs)
+
+
+smQL pull data
+-- data 
+    metadata
+
+
+rendering of primary data belongs to semantq component
+--
+what is key is that data must have the data attributes handles 
+model, editor? (not sure), recordID - weneed to be careful of duplication of data here 
+possibly more data about this piece of data can extracted from metadata(how - consider relatiosn)
+
+lest brain storm and pressure test this and come out with clean relationship betwwen 
+
+@semantq/data-editor, semantq component and smQL
+
+lest explore a fee scnerios 
+
+in my view semantq compoentn must have full control over its fetch and renderign logic and even css etc - but implement necessary data attributes that make it possible for data-editor the impelement on element leevel editing - api triggering and status alert (element or cell level) 

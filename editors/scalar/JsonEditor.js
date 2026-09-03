@@ -27,6 +27,33 @@ export default class JsonEditor extends BaseEditor {
       }
     });
 
+
+    textarea.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+
+        const raw = textarea.value.trim();
+
+        if (!raw) {
+          this.commit(null);
+          this.submit();
+          return;
+        }
+
+        try {
+          this.commit(JSON.parse(raw));
+          this.submit();
+        } catch {
+          // Leave invalid JSON in editor.
+        }
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.cancel();
+      }
+    });
+
     this.element = textarea;
     return textarea;
   }

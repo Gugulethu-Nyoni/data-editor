@@ -13,10 +13,24 @@ export default class MetadataResolver {
   }
 
   resolve(model, recordId, field) {
+    console.log(
+      '[MetadataResolver] resolve():',
+      {
+        model,
+        recordId,
+        field
+      }
+    );
+
     const fieldMetadata =
       this.metadata.fields?.[field];
 
     if (fieldMetadata) {
+      console.log(
+        '[MetadataResolver] field metadata found:',
+        fieldMetadata
+      );
+
       return {
         kind: 'field',
         model:
@@ -41,6 +55,7 @@ export default class MetadataResolver {
         recordId:
           relationMetadata.recordId || recordId,
         field,
+        relationModel: relationMetadata.type,
         metadata: relationMetadata,
         editor: null
       };
@@ -55,7 +70,26 @@ export default class MetadataResolver {
     }
 
     /*
-     * Explicit editor always wins.
+     * Structured metadata can determine the editor.
+     */
+    const structure =
+      metadata.structure?.type;
+
+    /*
+     * custom-key-value is a specialised repeater.
+     *
+     * It takes precedence over a generic editor declaration
+     * such as editor: 'key-value'.
+     */
+    if (structure === 'custom-key-value') {
+      return {
+        name: 'custom-key-value',
+        structure: metadata.structure
+      };
+    }
+
+    /*
+     * Explicit editor wins for all other editor types.
      *
      * This allows metadata such as:
      *
@@ -71,12 +105,6 @@ export default class MetadataResolver {
       };
     }
 
-    /*
-     * Structured metadata can determine the editor.
-     */
-    const structure =
-      metadata.structure?.type;
-
     if (structure === 'comma-separated-values') {
       return {
         name: 'comma-separated',
@@ -87,13 +115,6 @@ export default class MetadataResolver {
     if (structure === 'key-value') {
       return {
         name: 'key-value',
-        structure: metadata.structure
-      };
-    }
-
-    if (structure === 'custom-key-value') {
-      return {
-        name: 'custom-key-value',
         structure: metadata.structure
       };
     }

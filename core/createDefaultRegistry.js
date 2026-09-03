@@ -1,6 +1,7 @@
 import EditorRegistry from './EditorRegistry.js';
 
 import StringEditor from '../editors/scalar/StringEditor.js';
+import TextareaEditor from '../editors/scalar/TextareaEditor.js';
 import IntEditor from '../editors/scalar/IntEditor.js';
 import NumberEditor from '../editors/scalar/NumberEditor.js';
 import BigIntEditor from '../editors/scalar/BigIntEditor.js';
@@ -25,6 +26,7 @@ export default function createDefaultRegistry() {
   return new EditorRegistry().registerMany({
     text: StringEditor,
     string: StringEditor,
+    textarea: TextareaEditor,
 
     int: IntEditor,
 
