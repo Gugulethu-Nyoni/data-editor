@@ -22,7 +22,8 @@ export default class DataEditor {
     fields = null,
     onUpdated = () => {},
     onDeleted = () => {},
-    onError = () => {}
+    onError = () => {},
+    onCreated = null
   } = {}) {
     this.root = root;
     this.metadata = metadata || {};
@@ -65,6 +66,7 @@ export default class DataEditor {
     this.onUpdated = onUpdated;
     this.onDeleted = onDeleted;
     this.onError = onError;
+    this._onCreated = onCreated;
 
     this.metadataResolver = new MetadataResolver({
       metadata: this.metadata,
@@ -89,6 +91,8 @@ export default class DataEditor {
     this.boundElements = new Set();
     this.activeEditors = new Map();
   }
+
+
 
  mount() {
   console.log('[DataEditor] mount()');
@@ -1072,7 +1076,7 @@ export default class DataEditor {
 
 
   
-  async _commitElement(element, value, originalValue) {
+ async _commitElement(element, value, originalValue) {
     // Use the element's own identity directly — NO inference
     const model = element.dataset.model || element.dataset.editorModel;
     const recordId = element.dataset.recordId || element.dataset.editorRecordId || null;
@@ -1262,6 +1266,11 @@ export default class DataEditor {
               el.dataset.editorRecordId = result.id;
             }
           }
+
+          // Notify component of creation
+          if (this._onCreated && typeof this._onCreated === 'function') {
+            this._onCreated(result);
+          }
         }
 
         this._finishEdit(element, value);
@@ -1320,6 +1329,7 @@ export default class DataEditor {
       throw error;
     }
   }
+
   
 
   _handleUpdateSuccess(event = {}) {
