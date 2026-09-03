@@ -1,0 +1,178 @@
+@script
+
+import { DataEditor, smQLAdapter } from '@semantq/data-editor';
+import { smQL } from '@semantq/ql';
+import AppConfig from '/public/auth/js/config.js';
+
+const dataModel = 'User';
+const endpoint = '/User/Users';
+
+let loadingStatus = $state(true);
+let dataModelRecord = {};
+let metadata = { fields: {} };
+
+const params = new URLSearchParams(window.location.search);
+let recordId = params.get('rid');
+
+const baseUrl = AppConfig.BASE_URL;
+const baseOrigin = new URL(baseUrl).origin;
+const api = new smQL(baseOrigin);
+
+async function loadRecord() {
+
+  if (!recordId) {
+    console.error(`[${dataModel}] Record ID missing.`);
+    return;
+  }
+
+  try {
+
+    const response =
+      await api.get(`${endpoint}/${recordId}`);
+
+    const record =
+      response.data ||
+      response.record ||
+      response;
+
+    const hasData =
+      record &&
+      typeof record === 'object' &&
+      !Array.isArray(record) &&
+      !!record.id;
+
+    if (!hasData) {
+
+      console.log(
+        `[${dataModel}] No record found. Setting up for CREATE.`
+      );
+
+      recordId = 'new-record';
+      dataModelRecord = {};
+      metadata = response.metadata || { fields: {} };
+
+      renderDataEditor();
+      return;
+    }
+
+    metadata = response.metadata || { fields: {} };
+    dataModelRecord = { ...record };
+
+    delete dataModelRecord.metadata;
+    delete dataModelRecord._status;
+    delete dataModelRecord._ok;
+
+    renderDataEditor();
+
+  } catch (error) {
+
+    console.error(
+      `[${dataModel}] Failed to load:`,
+      error
+    );
+
+  }
+}
+
+function renderDataEditor() {
+
+  const root =
+    document.getElementById('data-editor');
+
+  if (!root) return;
+
+  root.innerHTML = '';
+
+  const adapter =
+    new smQLAdapter({
+      client: api,
+      resources: {
+        [dataModel]: {
+          endpoint
+        }
+      }
+    });
+
+  const editor =
+    new DataEditor({
+
+      root,
+      model: dataModel,
+      recordId,
+      metadata,
+      api: adapter,
+      record: dataModelRecord,
+
+      fieldMode: 'auto',
+
+      onCreated: (result) => {
+
+        if (!result?.id) return;
+
+        recordId = result.id;
+
+        window.history.replaceState(
+          {},
+          '',
+          `${window.location.pathname}?rid=${encodeURIComponent(result.id)}`
+        );
+
+      },
+
+      onUpdated: (response, payload) => {
+        console.log(
+          `[${dataModel}] Updated.`,
+          response,
+          payload
+        );
+      },
+
+      onDeleted: () => {
+        root.innerHTML = '';
+      },
+
+      onError: (error) => {
+        console.error(
+          `[${dataModel}] Error:`,
+          error
+        );
+      }
+
+    });
+
+  editor.mount();
+}
+
+$onMount(async () => {
+
+  loadingStatus.value = false;
+
+  await loadRecord();
+
+});
+
+@end
+
+
+@style
+
+#data-editor {
+  width: 100%;
+}
+
+@end
+
+
+@html
+
+@if(loadingStatus)
+
+  <p>Loading...</p>
+
+@else
+
+  <div id="data-editor"></div>
+
+@endif
+
+@end
