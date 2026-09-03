@@ -1177,7 +1177,7 @@ export default class DataEditor {
 
         const result = await this.mutations.create(createPayload);
 
-        // 🔥 Replace the temporary item with the created record (with real ID)
+        // Replace the temporary item with the created record (with real ID)
         if (result && result.id) {
           if (relationMeta?.isList === true) {
             const relationData = this.record[relation] || [];
@@ -1191,13 +1191,13 @@ export default class DataEditor {
             this.record[relation] = result;
           }
 
-          // 🔥 Update the DOM element's record ID
+          // Update the DOM element's record ID
           if (element) {
             element.dataset.recordId = result.id;
             element.dataset.editorRecordId = result.id;
           }
 
-          // 🔥 Propagate ID to ALL fields in the same record group
+          // Propagate ID to ALL fields in the same record group
           const group = element.closest('[data-editor-record-group]');
           if (group) {
             // Update the group's identity
@@ -1239,22 +1239,25 @@ export default class DataEditor {
         const result = await this.mutations.create(createPayload);
 
         if (result && result.id) {
+          // CRITICAL: Transition from CREATE to EXISTING
+          this.recordId = result.id;
+
           // Update local state with the new record
           this.record = {
             ...result,
             metadata: this.record.metadata
           };
 
-          // Update the DOM element's record ID
-          if (element) {
-            element.dataset.recordId = result.id;
-            element.dataset.editorRecordId = result.id;
-          }
+          // CRITICAL: Update BOTH types of targets
+          const targets = this.root.querySelectorAll(
+            '[data-editor-field], .smq-data-editable'
+          );
 
-          // 🔥 Propagate ID to ALL field targets
-          const targets = this.root.querySelectorAll('[data-editor-field]');
           for (const el of targets) {
-            if (el.dataset.editorRecordId === 'new-record') {
+            if (
+              el.dataset.recordId === 'new-record' ||
+              el.dataset.editorRecordId === 'new-record'
+            ) {
               el.dataset.recordId = result.id;
               el.dataset.editorRecordId = result.id;
             }
@@ -1317,8 +1320,7 @@ export default class DataEditor {
       throw error;
     }
   }
-
-
+  
 
   _handleUpdateSuccess(event = {}) {
     const { model, recordId, field, value, response } = event;
