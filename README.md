@@ -1,4 +1,4 @@
-# @semantq/data-editor (Update)
+# @semantq/data-editor (Updated)
 
 A metadata-driven, inline data editor for Semantq applications.
 
