@@ -34,6 +34,8 @@ The basic configuration is:
 fieldMode: 'auto'
 ```
 
+Complete example below
+
 No individual field targets need to be created by the component.
 
 
