@@ -1551,7 +1551,11 @@ When adding an editor:
 
 Avoid adding field-specific behaviour directly to `DataEditor` when the behaviour belongs in an editor implementation.
 
+# TODOs
 
+Document:
+- Editor Modes
+- Do templates for each
 
 # License
 
