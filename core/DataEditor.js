@@ -119,7 +119,7 @@ export default class DataEditor {
     return this;
   }
 
-  if (this.fieldMode === 'auto' && this.endpoint) {
+  if (this.endpoint && ['auto', 'existing', 'generate'].includes(this.fieldMode)) {
     this._loadResource()
       .then((success) => {
         if (success) {
