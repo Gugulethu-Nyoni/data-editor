@@ -67,9 +67,9 @@ The application therefore remains responsible for defining **what resource it is
 
 **Templates**
 
-- [Auto Mode Template](blob/main/templates/Auto/AutoMode.smq)
-- [Auto Mode with Selected Fields](blob/main/templates/Auto/SpecificFields.smq)
-- [Auto Mode with Exclude Fields](blob/main/templates/Auto/ExcludeFields.smq)
+- [Auto Mode Template](blob/main/templates/auto/AutoMode.smq)
+- [Auto Mode with Selected Fields](blob/main/templates/auto/SpecificFields.smq)
+- [Auto Mode with Exclude Fields](blob/main/templates/auto/ExcludeFields.smq)
 
 # Overview
 
