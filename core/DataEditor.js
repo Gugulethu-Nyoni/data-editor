@@ -22,6 +22,7 @@ export default class DataEditor {
   layout = 'stacked',
   fields = null,
   excludeFields = null,
+  fieldLayout = null,
   onUpdated = () => {},
   onDeleted = () => {},
   onError = () => {},
@@ -62,6 +63,9 @@ export default class DataEditor {
   this.layout = layout;
   this.fields = fields;
   this.excludeFields = Array.isArray(excludeFields) ? excludeFields : [];
+  this.fieldLayout = (fieldLayout && typeof fieldLayout === 'object')
+    ? fieldLayout
+    : null;
 
   const validFieldModes = ['existing', 'generate', 'auto', 'targeted'];
   if (!validFieldModes.includes(this.fieldMode)) {
@@ -119,7 +123,7 @@ export default class DataEditor {
     return this;
   }
 
-  if (this.endpoint && ['auto', 'existing', 'generate'].includes(this.fieldMode)) {
+  if (this.endpoint && ['auto', 'existing', 'generate', 'targeted'].includes(this.fieldMode)) {
     this._loadResource()
       .then((success) => {
         if (success) {
@@ -259,7 +263,7 @@ export default class DataEditor {
     this._renderFields();
 
     const containers = this.root.querySelectorAll(
-      '.smq-data-editor-fields, [data-editor-container]'
+      '.smq-data-editor-fields, [data-editor-container], [data-editor-target]'
     );
     for (const container of containers) {
       this._applyLayout(container);
@@ -502,6 +506,7 @@ export default class DataEditor {
 
   _renderFields() {
     if (this.fieldMode === 'targeted') {
+      this._generateTargets();
       this._renderTargetedFields();
       return;
     }
@@ -580,6 +585,57 @@ export default class DataEditor {
             }
           }
         }
+      }
+    }
+  }
+
+  _generateTargets() {
+    if (!this.fieldLayout) {
+      return;
+    }
+
+    for (const targetName in this.fieldLayout) {
+      const container = this.root.querySelector(
+        `[data-editor-target="${targetName}"]`
+      );
+
+      if (!container) {
+        console.warn(`[DataEditor] Target container not found: ${targetName}`);
+        continue;
+      }
+
+      const fieldNames = this.fieldLayout[targetName];
+
+      if (!Array.isArray(fieldNames)) {
+        continue;
+      }
+
+      for (const fieldName of fieldNames) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'smq-data-editor-field';
+        wrapper.dataset.field = fieldName;
+
+        const label = document.createElement('span');
+        label.className = 'smq-data-editor-label';
+        label.textContent = fieldName;
+
+        const valueContainer = document.createElement('div');
+        valueContainer.className = 'smq-data-editor-value';
+
+        const target = document.createElement('span');
+
+        target.setAttribute('data-editor-field', fieldName);
+        target.setAttribute('data-editor-model', this.model || '');
+        target.setAttribute('data-editor-field-name', fieldName);
+
+        if (this.recordId) {
+          target.setAttribute('data-editor-record-id', this.recordId);
+        }
+
+        valueContainer.appendChild(target);
+        wrapper.appendChild(label);
+        wrapper.appendChild(valueContainer);
+        container.appendChild(wrapper);
       }
     }
   }
@@ -668,7 +724,7 @@ export default class DataEditor {
       const fieldMetadata = this.metadata.fields?.[field] || {};
       if (!this._canEditField(field, fieldMetadata)) continue;
 
-      if (element.parentElement?.querySelector('.smq-data-editor-indicator')) {
+      if (element.nextElementSibling?.classList.contains('smq-data-editor-indicator')) {
         continue;
       }
 
@@ -687,8 +743,7 @@ export default class DataEditor {
         }
       });
 
-      const parent = element.parentElement || element;
-      parent.appendChild(indicator);
+      element.insertAdjacentElement('afterend', indicator);
     }
   }
 
