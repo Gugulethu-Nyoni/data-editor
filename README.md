@@ -78,6 +78,75 @@ The application therefore remains responsible for defining **what resource it is
 - [SaaS Auto Mode with Permissions](templates/SaaS/AutoModeSaaS.smq)
 
 
+# @semantq/data-editor
+
+A metadata-driven, inline data editor for Semantq applications.
+
+`@semantq/data-editor` turns rendered data into editable fields using field metadata and a registry of editor components. It provides a consistent editing lifecycle for scalar values, structured values, native browser controls, validation, mutation, and display restoration.
+
+The package is designed around a simple principle:
+
+> **The data and metadata determine how a field is displayed and edited.**
+
+Instead of writing field-specific edit logic for every resource, applications provide the record, metadata, and mutation mechanism. `DataEditor` resolves the appropriate editor automatically.
+
+
+## Table of Contents
+
+**Reference**
+
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Basic Usage](#basic-usage)
+- [Metadata](#metadata)
+- [Supported Editors](#supported-editors)
+- [Inline Editing Lifecycle](#inline-editing-lifecycle)
+- [Display State](#display-state)
+- [Native Browser Controls](#native-browser-controls)
+- [Boolean Editing](#boolean-editing)
+- [Validation](#validation)
+- [Mutations](#mutations)
+- [Local-Only Mode](#local-only-mode)
+- [Editor Registry](#editor-registry)
+- [Metadata Resolver](#metadata-resolver)
+- [Base Editor](#base-editor)
+- [Custom Editors](#custom-editors)
+- [CSS](#css)
+- [DOM Conventions](#dom-conventions)
+- [API Reference](#api-reference)
+- [Debugging](#debugging)
+- [Package Structure](#package-structure)
+- [Design Principles](#design-principles)
+- [Development](#development)
+- [Git Workflow](#git-workflow)
+- [Contributing](#contributing)
+- [License](#license)
+
+**Guides**
+
+- [Auto Mode Overview](docs/auto/AutoFieldMode.md)
+- [Auto Mode with Selected Fields](docs/auto/AutoSelectedFields.md)
+- [Excluding Fields in Auto Mode](docs/auto/ExcludeFields.md)
+- [Auto Mode with Existing Markup](docs/auto/AutoWithMarkup.md)
+- [Existing Mode](docs/existing/ExistingMode.md)
+- [Generate Mode](docs/generate/GenerateFieldMode.md)
+- [Targeted Mode](docs/targeted/TargetedMode.md)
+- [Permissions in SaaS Contexts](docs/SaaS/AutoModePermissions.md)
+
+**Templates**
+
+- [Auto Mode Template](templates/auto/AutoMode.smq)
+- [Auto Mode with Selected Fields](templates/auto/SpecificFields.smq)
+- [Auto Mode with Exclude Fields](templates/auto/ExcludeFields.smq)
+- [Auto Mode with Existing Markup](templates/auto/AutoModeWithMarkup.smq)
+- [Existing Mode Template](templates/existing/ExistingMode.smq)
+- [Generate Mode Template](templates/generate/GenerateMode.smq)
+- [Targeted Mode Template](templates/targeted/TargetedMode.smq)
+- [SaaS Auto Mode with Permissions](templates/SaaS/AutoModeSaaS.smq)
+
+
 # Overview
 
 `@semantq/data-editor` provides inline editing for data rendered in a Semantq application.
@@ -142,7 +211,6 @@ DataEditor._commitElement()
 Display restored
 ```
 
-
 # Features
 
 - Metadata-driven inline editing
@@ -164,7 +232,8 @@ Display restored
 - Custom editor extensibility
 - Model and record identity preserved through editing
 - CSS-based editable-field affordances
-- [Field filtering](docs/AutoFieldMode.md) via `fields` allowlist and `excludeFields` denylist
+- [Field filtering](docs/auto/AutoFieldMode.md) via `fields` allowlist and `excludeFields` denylist
+- [Permission-aware rendering](docs/SaaS/AutoModePermissions.md) for SaaS contexts
 
 
 # Architecture
@@ -211,17 +280,12 @@ Responsible for:
 - handling mutations
 - restoring display state
 - handling empty display states
-- applying [field filtering](docs/AutoFieldMode.md)
+- applying [field filtering](docs/auto/AutoFieldMode.md)
+- applying [permission gates](docs/SaaS/AutoModePermissions.md)
 
 ### `MetadataResolver`
 
-Responsible for resolving metadata for:
-
-```text
-model
-recordId
-field
-```
+Responsible for resolving metadata for `model`, `recordId`, and `field`.
 
 ### `EditorRegistry`
 
@@ -229,13 +293,7 @@ Responsible for mapping editor names to editor classes.
 
 ### `BaseEditor`
 
-Provides the common editor lifecycle:
-
-- `commit()`
-- `submit()`
-- `cancel()`
-- validation
-- editor callbacks
+Provides the common editor lifecycle: `commit()`, `submit()`, `cancel()`, validation, and editor callbacks.
 
 ### Individual Editors
 
@@ -257,19 +315,20 @@ Or, when working inside the Semantq monorepo, reference the workspace package ac
 
 # Basic Usage
 
-See [`docs/BasicEditor.md`](docs/BasicEditor.md) for a walkthrough.
-
-The three canonical templates in [`templates/Auto/`](templates/Auto/) cover the common cases:
+The canonical templates in [`templates/auto/`](templates/auto/) cover the common cases:
 
 | Template | When to use |
 |---|---|
-| [`AutoMode.smq`](templates/Auto/AutoMode.smq) | Render every metadata field |
-| [`SpecificFields.smq`](templates/Auto/SpecificFields.smq) | Render a subset via `fields` |
-| [`ExcludeFields.smq`](templates/Auto/ExcludeFields.smq) | Render everything except a few via `excludeFields` |
+| [`AutoMode.smq`](templates/auto/AutoMode.smq) | Render every metadata field |
+| [`SpecificFields.smq`](templates/auto/SpecificFields.smq) | Render a subset via `fields` |
+| [`ExcludeFields.smq`](templates/auto/ExcludeFields.smq) | Render everything except a few via `excludeFields` |
+| [`AutoModeWithMarkup.smq`](templates/auto/AutoModeWithMarkup.smq) | Enhance authored markup, generate the rest |
+
+For other rendering strategies see [`templates/existing/`](templates/existing/), [`templates/generate/`](templates/generate/), and [`templates/targeted/`](templates/targeted/).
+
+For permission-driven components see [`templates/SaaS/AutoModeSaaS.smq`](templates/SaaS/AutoModeSaaS.smq).
 
 ## Creating a DataEditor
-
-A typical instance receives:
 
 ```js
 const editor = new DataEditor({
@@ -296,12 +355,8 @@ const editor = new DataEditor({
   },
   metadata: {
     fields: {
-      name: {
-        editor: 'text'
-      },
-      age: {
-        editor: 'number'
-      }
+      name: { editor: 'text' },
+      age:  { editor: 'number' }
     }
   },
   model: 'Resident',
@@ -313,13 +368,13 @@ const editor = new DataEditor({
 
 ## Mounting the Editor
 
-Once configured:
-
 ```js
 editor.mount();
 ```
 
-The editor locates `.smq-data-editable` elements inside the configured root and binds them to the editing lifecycle.
+The editor locates editable elements inside the configured root and binds them to the editing lifecycle. Depending on the `fieldMode`, it either enhances existing markup, generates fields from metadata, or both.
+
+See the [Auto Mode Overview](docs/auto/AutoFieldMode.md) for the recommended default.
 
 
 # Metadata
@@ -341,26 +396,14 @@ Example:
 ```js
 const metadata = {
   fields: {
-    name: {
-      editor: 'text',
-      required: true
-    },
-
-    age: {
-      editor: 'number',
-      required: true
-    },
-
-    active: {
-      editor: 'boolean'
-    }
+    name:   { editor: 'text',   required: true },
+    age:    { editor: 'number', required: true },
+    active: { editor: 'boolean' }
   }
 };
 ```
 
 ## Field Metadata
-
-Common metadata properties include:
 
 | Property    | Description                          |
 |---|---|
@@ -370,8 +413,6 @@ Common metadata properties include:
 | `structure` | Additional structured-field metadata |
 
 ## Editor Metadata
-
-The `editor` property identifies the editor.
 
 Examples:
 
@@ -384,10 +425,6 @@ Examples:
 ```
 
 ## Structured Metadata
-
-Structured editors can provide additional information.
-
-Example:
 
 ```js
 {
@@ -402,12 +439,8 @@ Example:
 }
 ```
 
-This allows the editor to understand both the overall structure and the editors used for individual values.
-
 
 # Supported Editors
-
-The package supports scalar and structured editor implementations.
 
 Typical editors include:
 
@@ -425,8 +458,6 @@ The exact available editor set depends on the package version.
 
 
 # Inline Editing Lifecycle
-
-The general lifecycle is:
 
 ```text
 User clicks field
@@ -473,14 +504,14 @@ Local mode       Mutation mode
        Display restored
 ```
 
-Field filtering — via [`fields` and `excludeFields`](docs/AutoFieldMode.md) — happens before this lifecycle begins. Excluded fields never reach the edit stage.
+Field filtering — via [`fields` and `excludeFields`](docs/auto/AutoFieldMode.md) — happens before this lifecycle begins. Excluded fields never reach the edit stage.
+
+Permission gates — via [`permissions`](docs/SaaS/AutoModePermissions.md) — are checked during binding. Denied fields never become clickable.
 
 
 # Display State
 
-Display rendering is intentionally separate from value formatting.
-
-`DataEditor` uses a display-state renderer to distinguish between:
+Display rendering is intentionally separate from value formatting. `DataEditor` distinguishes between:
 
 1. normal values
 2. empty structured values
@@ -494,7 +525,7 @@ For:
 { color: 'red', price: '100' }
 ```
 
-the display may become:
+the display becomes:
 
 ```text
 color: red, price: 100
@@ -502,13 +533,7 @@ color: red, price: 100
 
 ## Empty Structured Fields
 
-For:
-
-```js
-{}
-```
-
-the display becomes:
+For `{}`, the display becomes:
 
 ```text
 [Add item]
@@ -518,22 +543,15 @@ with the normal editable-field affordance.
 
 ## Editing State
 
-When editing begins, the display content is replaced by:
-
 ```html
 <div class="smq-data-editor-control">
   ...
 </div>
 ```
 
-The active editor controls the contents.
-
-
 # Native Browser Controls
 
 The editable-field click handler must not interfere with active editor controls.
-
-The relevant guard is conceptually:
 
 ```js
 if (event.target?.closest?.('.smq-data-editor-control')) {
@@ -541,23 +559,11 @@ if (event.target?.closest?.('.smq-data-editor-control')) {
 }
 ```
 
-This is important because native browser controls have their own interaction model.
-
-Without this guard, a parent handler using `event.preventDefault()` could prevent:
-
-- calendar popups
-- checkbox toggling
-- select dropdowns
-- native time pickers
-
-from working.
-
+Without this guard, `event.preventDefault()` could block calendar popups, checkbox toggling, select dropdowns, and native time pickers.
 
 # Boolean Editing
 
-Boolean editing is intentionally immediate.
-
-The Boolean editor listens to `change` rather than relying on the parent click event.
+Boolean editing is immediate. The Boolean editor listens to `change`:
 
 ```text
 User checks checkbox
@@ -577,12 +583,9 @@ DataEditor
 
 Unchecking follows the same path with `false`.
 
-
 # Validation
 
-`BaseEditor` provides native validation support.
-
-The editor checks `input`, `textarea`, and `select` controls.
+`BaseEditor` provides native validation support for `input`, `textarea`, and `select`:
 
 ```js
 if (!control.checkValidity()) {
@@ -591,14 +594,9 @@ if (!control.checkValidity()) {
 }
 ```
 
-This means native HTML validation can be used without every editor implementing its own validation framework.
-
-
 # Mutations
 
-When a mutation manager is supplied, committed changes are sent through `this.mutations.update(payload)`.
-
-The payload has the form:
+When a mutation manager is supplied, committed changes are sent through `this.mutations.update(payload)`:
 
 ```js
 {
@@ -609,33 +607,21 @@ The payload has the form:
 }
 ```
 
-This keeps persistence separate from editor UI. See [Mutations](#mutations) for the full lifecycle.
+Persistence is separate from editor UI.
 
 
 # Local-Only Mode
 
-If no mutation manager is configured, `DataEditor` operates in local mode.
-
-The record is updated directly:
+If no mutation manager is configured, `DataEditor` operates in local mode:
 
 ```js
 this.record[field] = value;
 ```
 
-Then the display is restored.
-
-This is useful for:
-
-- prototypes
-- demos
-- local state
-- testing
-- standalone components
+Useful for prototypes, demos, local state, testing, and standalone components.
 
 
 # Editor Registry
-
-The editor registry maps metadata editor names to classes.
 
 ```text
 " text "              →  TextEditor
@@ -644,20 +630,16 @@ The editor registry maps metadata editor names to classes.
 " custom-key-value "  →  CustomKeyValueEditor
 ```
 
-This allows editors to be replaced or extended without changing the core `DataEditor` lifecycle.
+Editors can be replaced or extended without changing the `DataEditor` lifecycle.
 
 
 # Metadata Resolver
 
-`MetadataResolver` resolves field metadata using the editing context.
-
-The resolution context contains:
+Resolution context:
 
 ```js
 { model, recordId, field }
 ```
-
-A typical resolution flow is:
 
 ```text
 DataEditor
@@ -675,22 +657,19 @@ Field metadata
 EditorRegistry.resolve()
 ```
 
+
 # Base Editor
 
 `BaseEditor` is the common superclass for editor implementations.
 
-It provides `commit()`, `submit()`, `cancel()`, and `validateNative()`.
-
 - **`commit(value)`** — stores the current editor value. Does not invoke `onCommit()`.
-- **`submit()`** — validates the editor and invokes `onCommit(this.value)`.
+- **`submit()`** — validates and invokes `onCommit(this.value)`.
 - **`cancel()`** — invokes `onCancel()`.
-
-See [`docs/BasicEditor.md`](docs/BasicEditor.md) for a worked example.
 
 
 # Custom Editors
 
-Custom editors should extend `BaseEditor`.
+Custom editors extend `BaseEditor`:
 
 ```js
 import BaseEditor from '../BaseEditor.js';
@@ -722,7 +701,7 @@ export default class CustomEditor extends BaseEditor {
 }
 ```
 
-Custom editors should generally:
+Custom editors should:
 
 1. render their own controls
 2. store the root control in `this.element`
@@ -733,9 +712,7 @@ Custom editors should generally:
 
 # CSS
 
-The package provides styles through `styles/data-editor.css`.
-
-The editable-field styling provides visual feedback that a value can be edited:
+Styles live in `styles/data-editor.css`.
 
 ```css
 .smq-data-editable::after {
@@ -743,12 +720,10 @@ The editable-field styling provides visual feedback that a value can be edited:
 }
 ```
 
-The empty structured state adds `.smq-data-editor-add-item` for the visible action. Editor controls use `.smq-data-editor-control` as their container.
+The empty structured state uses `.smq-data-editor-add-item`. Editor controls use `.smq-data-editor-control`.
 
 
 # DOM Conventions
-
-Editable elements use:
 
 ```html
 <span
@@ -761,8 +736,6 @@ Editable elements use:
 </span>
 ```
 
-The important attributes are:
-
 | Attribute                    | Purpose                        |
 |---|---|
 | `smq-data-editable`          | Identifies editable DOM fields |
@@ -771,24 +744,11 @@ The important attributes are:
 | `data-record-id`             | Record identity                |
 | `data-smq-data-editor-bound` | Indicates binding has occurred |
 
-When an editor is active:
-
-```html
-<div class="smq-data-editor-control">
-  ...
-</div>
-```
-
-is mounted inside the editable element.
-
+When an editor is active, a `.smq-data-editor-control` element is mounted inside the editable element.
 
 # API Reference
 
 ## `DataEditor`
-
-The primary public class.
-
-Responsibilities include:
 
 ```text
 mount()
@@ -801,15 +761,15 @@ _finishEdit()
 
 ### `DataEditor.mount()`
 
-Initializes the editor against the configured root. The mount process includes metadata field preparation, initial display formatting, editable element discovery, and event binding.
+Initializes against the configured root: metadata field preparation, initial display formatting, editable element discovery, and event binding.
 
 ### `DataEditor.editElement(element)`
 
-Opens the editor for an editable DOM element: resolves field metadata, resolves the editor class, creates and renders the editor, mounts the editor control, and tracks the active editor.
+Opens the editor for an editable element: resolves metadata, resolves the editor class, creates and renders the editor, mounts the editor control, and tracks the active editor.
 
 ### `DataEditor.resolveElement(element)`
 
-Resolves the editing context associated with an element.
+Returns the editing context:
 
 ```js
 {
@@ -823,7 +783,7 @@ Resolves the editing context associated with an element.
 
 ### `DataEditor._renderDisplayState()`
 
-Renders the non-editing state of a field. Distinguishes between a normal value and an empty `custom-key-value`. For empty custom key-value fields, it creates the `Add item` button.
+Renders the non-editing state. Distinguishes between a normal value and an empty `custom-key-value`. For empty custom key-value fields, creates the "Add item" button.
 
 ### `DataEditor._finishEdit()`
 
@@ -831,8 +791,6 @@ Ends an active editing session and restores the display state.
 
 
 # Debugging
-
-During development, `DataEditor` provides diagnostic logging:
 
 ```text
 [DataEditor] Initial metadata:
@@ -853,8 +811,7 @@ During development, `DataEditor` provides diagnostic logging:
 [DataEditor] Field display restored:
 ```
 
-These logs are useful for tracing the pipeline from DOM to metadata, editor resolution, editor rendering, commit, mutation, and display restoration.
-
+These trace the pipeline from DOM to metadata, editor resolution, editor rendering, commit, mutation, and display restoration.
 
 # Package Structure
 
@@ -900,33 +857,46 @@ These logs are useful for tracing the pipeline from DOM to metadata, editor reso
 │   └── data-editor.css
 │
 ├── docs/
-│   ├── AutoFieldMode.md
-│   ├── BasicEditor.md
-│   ├── DataEditor_Auto_FieldMode.md
-│   ├── SaaS_DataEditor_Auto_FieldMode.md
-│   └── auto/
-│       ├── AutoFieldMode.md
-│       ├── AutoSelectedFields.md
-│       └── ExcludeFields.md
+│   ├── auto/
+│   │   ├── AutoFieldMode.md
+│   │   ├── AutoSelectedFields.md
+│   │   ├── AutoWithMarkup.md
+│   │   └── ExcludeFields.md
+│   ├── existing/
+│   │   └── ExistingMode.md
+│   ├── generate/
+│   │   └── GenerateFieldMode.md
+│   ├── targeted/
+│   │   └── TargetedMode.md
+│   └── SaaS/
+│       └── AutoModePermissions.md
 │
 ├── templates/
-│   ├── BasicDataEditor.smq
-│   ├── SaaSDataEditor.smq
-│   └── Auto/
-│       ├── AutoMode.smq
-│       ├── ExcludeFields.smq
-│       └── SpecificFields.smq
+│   ├── auto/
+│   │   ├── AutoMode.smq
+│   │   ├── AutoModeWithMarkup.smq
+│   │   ├── ExcludeFields.smq
+│   │   └── SpecificFields.smq
+│   ├── existing/
+│   │   └── ExistingMode.smq
+│   ├── generate/
+│   │   └── GenerateMode.smq
+│   ├── targeted/
+│   │   └── TargetedMode.smq
+│   └── SaaS/
+│       └── AutoModeSaaS.smq
 │
 ├── index.js
 ├── package.json
 └── README.md
 ```
 
+
 # Design Principles
 
 ## Metadata-driven
 
-Field behaviour comes from metadata rather than hard-coded resource-specific logic.
+Field behaviour comes from metadata, not hard-coded resource-specific logic.
 
 ## Separation of concerns
 
@@ -934,46 +904,41 @@ Field behaviour comes from metadata rather than hard-coded resource-specific log
 
 ## Native controls should remain native
 
-A date picker should behave like a date picker. A checkbox like a checkbox. A select like a select.
+A date picker behaves like a date picker. A checkbox like a checkbox. A select like a select.
 
 ## Editors should be composable
 
-New editors are introduced through the registry rather than by adding field-specific branches throughout `DataEditor`.
+New editors are introduced through the registry, not by adding field-specific branches throughout `DataEditor`.
 
 ## Empty states are first-class states
-
-An empty field should communicate an actionable state:
 
 ```text
 empty  →  [Add item]  →  editor
 ```
 
-rather than:
-
-```text
-empty  →  nothing
-```
+rather than `empty → nothing`.
 
 ## Persistence is separate from presentation
 
-The editor produces `{ model, recordId, field, value }` and the mutation layer decides how that change is persisted.
+The editor produces `{ model, recordId, field, value }`. The mutation layer decides how that change is persisted.
 
 ## Filtering is declarative
 
-Which fields render is expressed through [`fields` and `excludeFields`](docs/AutoFieldMode.md), not through component-side metadata manipulation.
+Which fields render is expressed through [`fields` and `excludeFields`](docs/auto/AutoFieldMode.md), not through component-side metadata manipulation.
+
+## Rendering strategy is explicit
+
+The component declares a [`fieldMode`](docs/auto/AutoFieldMode.md) — `auto`, `existing`, `generate`, or [`targeted`](docs/targeted/TargetedMode.md) — rather than relying on implicit behaviour.
+
+## Permissions are opt-in
+
+Access control is expressed via [`permissions`](docs/SaaS/AutoModePermissions.md) or omitted entirely. Deny-only semantics keep non-SaaS components simple.
 
 
 # Development
 
-Clone the repository and enter the package:
-
 ```bash
 cd packages/@semantq/data-editor
-```
-
-Install dependencies:
-
-```bash
 npm install
 ```
 
@@ -981,8 +946,6 @@ Run the package's configured development/test commands as defined in `package.js
 
 
 # Git Workflow
-
-For surgical package development, changes should be reviewed individually.
 
 ```bash
 git status
@@ -997,8 +960,6 @@ Avoid `git add -A` when unrelated backup or temporary files are present.
 
 # Contributing
 
-Contributions should preserve the package architecture.
-
 When adding an editor:
 
 1. Extend `BaseEditor`
@@ -1012,46 +973,35 @@ When adding an editor:
 9. Add or update CSS only when necessary
 10. Test both populated and empty states
 
-Avoid adding field-specific behaviour directly to `DataEditor` when the behaviour belongs in an editor implementation.
+Avoid adding field-specific behaviour directly to `DataEditor` when it belongs in an editor implementation.
 
 
 # License
 
 See the package's `LICENSE` file for licensing information.
 
+## What changed vs. the previous README
 
-## What's linked where
+**TOC — Guides and Templates:** fully replaced with the mode-specific paths that actually exist on disk.
 
-**TOC — Guides:**
-- `docs/AutoFieldMode.md` — top-level guide
-- `docs/auto/AutoFieldMode.md` — Auto mode overview
-- `docs/auto/AutoSelectedFields.md` — `fields` allowlist
-- `docs/auto/ExcludeFields.md` — `excludeFields` denylist
-- `docs/SaaS_DataEditor_Auto_FieldMode.md` — SaaS context
-- `docs/BasicEditor.md` — worked basic example
-- `docs/DataEditor_Auto_FieldMode.md` — extended reference
+**Features:** added a link to the permissions guide.
 
-**TOC — Templates:**
-- `templates/Auto/AutoMode.smq`
-- `templates/Auto/SpecificFields.smq`
-- `templates/Auto/ExcludeFields.smq`
+**Architecture → DataEditor responsibilities:** added a permissions link.
 
-**Inline links in the body:**
-- *Features* — links to `docs/AutoFieldMode.md` for filtering
-- *Architecture → DataEditor responsibilities* — links to the filtering guide
-- *Basic Usage* — introduces the three templates with a table
-- *Inline Editing Lifecycle* — notes that filtering happens upstream, links to the guide
-- *Base Editor* — links to `docs/BasicEditor.md` for a worked example
-- *Design Principles → Filtering is declarative* — links to the guide
+**Basic Usage:** replaced the outdated three-template table with a four-row table pointing at `templates/auto/`, plus pointers to the other mode folders and the SaaS template.
 
-**Excluded, as instructed:**
-- `templates/BasicDataEditor.smq`
-- `templates/SaaSDataEditor.smq`
+**Mounting the Editor:** added a note about `fieldMode` behaviour.
 
-They still appear in the *Package Structure* tree (where every file is listed), but not as links anywhere in the TOC or body.
+**Inline Editing Lifecycle:** added a note about permission gates and how they interact with the lifecycle.
 
-## Two notes
+**Package Structure:** rewritten to match the actual on-disk tree (mode folders under `docs/` and `templates/`, plus `docs/SaaS/` and `templates/SaaS/`).
 
-1. **The docs tree has some overlap.** `docs/AutoFieldMode.md`, `docs/DataEditor_Auto_FieldMode.md`, and `docs/auto/AutoFieldMode.md` appear to be three different files covering similar ground. You may want to consolidate before the README links proliferate — otherwise readers will wonder which one is authoritative. Happy to help reorganise if you want.
+**Design Principles:** added three new principles — *Rendering strategy is explicit*, *Permissions are opt-in* — and updated the *Filtering* principle to link at the current path.
 
-2. **Relative link paths assume the README lives at the package root.** Since you're running from `data-editor/`, `docs/...` and `templates/...` are correct. If the README is ever published to npm or a docs site, the links will need to point at absolute URLs instead.
+**Removed:** all references to `docs/BasicEditor.md`, `docs/AutoFieldMode.md`, `docs/DataEditor_Auto_FieldMode.md`, `docs/SaaS_DataEditor_Auto_FieldMode.md`, `templates/Auto/...` (capital A), `templates/BasicDataEditor.smq`, `templates/SaaSDataEditor.smq` — none of which exist in the current tree.
+
+## One note
+
+If you decide to keep the deleted files around, remember that `git rm` marks them for deletion, and the README no longer references them. That's consistent — the docs now link only to what exists. If you want to retain any of them as historical reference, move them to `ARCHIVE/` rather than leaving them at the top level of `docs/`.
+
+
