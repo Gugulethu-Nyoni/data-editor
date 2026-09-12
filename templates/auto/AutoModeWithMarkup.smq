@@ -1,3 +1,45 @@
+# DataEditor — Auto Mode with Existing Markup
+
+## Overview
+
+Auto mode has two faces:
+
+- **Empty root** — DataEditor generates every field.
+- **Partially populated root** — DataEditor enhances the fields you've authored, and generates the rest.
+
+The component code is identical in both cases. Only the HTML changes. This guide covers the second case: *auto mode with existing markup*.
+
+The rule is simple: **for each metadata field, if an element with a matching `id` exists in the root, DataEditor enhances it. Otherwise, it generates a field.**
+
+```text
+metadata.fields
+      │
+      ▼
+for each field:
+      │
+      ├── matching #id in DOM?
+      │     ├── YES → enhance
+      │     └── NO  → generate
+      ▼
+   rendered
+```
+
+
+## When to use this
+
+Use auto-with-markup when:
+
+- A designer wants specific fields laid out a particular way.
+- Most fields can flow automatically, but a few need custom treatment.
+- You want to iterate: start with an empty root, author more fields over time, keep everything else generated.
+- The same component serves multiple resources, but one field needs consistent positioning across all of them.
+
+If **every** field needs custom markup, use `existing` mode instead. If **no** field needs custom markup, stay with an empty root.
+
+
+## The component
+
+```semantq
 @script
 
 import { DataEditor } from '@semantq/data-editor';
@@ -79,3 +121,194 @@ $onMount(() => {
     <span id="active"></span>
   </div>
 </div>
+```
+
+Three fields are pre-authored: `name`, `price`, `active`. The rest of the metadata fields (after `excludeFields`) are generated.
+
+
+## How matching works
+
+For each field, DataEditor calls `_findFieldElement(field)`:
+
+```js
+_findFieldElement(field) {
+  if (!field) return null;
+  return this.root.querySelector(`#${CSS.escape(field)}`);
+}
+```
+
+It looks for an element whose `id` equals the field name, scoped to the root. That's the whole matching rule.
+
+Implications:
+
+- The element must have an `id` matching the field name exactly. `id="product-name"` will **not** match field `name`.
+- The element must be inside the root. A matching element elsewhere in the document is ignored.
+- Any HTML element type works — `<span>`, `<div>`, `<td>`, whatever fits the layout.
+- The element's position in the root determines where that field appears in the final render.
+
+
+## What happens in each case
+
+| Field state | Result |
+|---|---|
+| In metadata, matching `#id` in root | **Enhanced** in place |
+| In metadata, no matching element | **Generated** into a container |
+| In root, no matching metadata field | **Ignored** — left as authored |
+| In `excludeFields` | Skipped entirely (neither enhanced nor generated) |
+
+The last row is important: exclude wins over everything. An element in the root with `id="createdAt"` will not be enhanced if `createdAt` is excluded.
+
+
+## The DOM after mount
+
+Given the component above and a record with fields `id`, `name`, `description`, `sku`, `price`, `stock`, `active`, `category`, `createdAt`, `updatedAt`:
+
+**Before mount:**
+
+```html
+<div id="data-editor">
+  <div class="field"><label>name</label><span id="name"></span></div>
+  <div class="field"><label>price</label><span id="price"></span></div>
+  <div class="field"><label>active</label><span id="active"></span></div>
+</div>
+```
+
+**After mount:**
+
+```html
+<div id="data-editor">
+  <div class="field"><label>name</label><span id="name" class="smq-data-editable" ...></span></div>
+  <div class="field"><label>price</label><span id="price" class="smq-data-editable" ...></span></div>
+  <div class="field"><label>active</label><span id="active" class="smq-data-editable" ...></span></div>
+  <div class="smq-data-editor-fields smq-data-editor-layout-inline" data-layout="inline">
+    <div class="smq-data-editor-field" data-field="description">...</div>
+    <div class="smq-data-editor-field" data-field="sku">...</div>
+    <div class="smq-data-editor-field" data-field="stock">...</div>
+    <div class="smq-data-editor-field" data-field="category">...</div>
+  </div>
+</div>
+```
+
+Two facts to note:
+
+1. **The enhanced fields stay in place.** DataEditor does not move them into the generated container. Where you author them is where they render.
+2. **The generated container is appended as the last child of the root.** Everything that wasn't matched goes into a new `.smq-data-editor-fields` div, placed after all existing children.
+
+The rendered order is therefore: **authored fields first, then generated fields.** Not metadata order. If you want a specific field to appear between two authored fields, author it too.
+
+
+## CSS considerations
+
+Because the enhanced fields and the generated container are siblings, styling needs to account for both:
+
+```css
+/* Style the wrapper you authored */
+#data-editor .field {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+/* Style the container DataEditor generates */
+#data-editor .smq-data-editor-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+```
+
+If you want the generated fields to look identical to the authored ones, you can either:
+
+- Author all fields (and use `existing` mode), or
+- Style `.smq-data-editor-field` to match `.field`:
+
+```css
+#data-editor .field,
+#data-editor .smq-data-editor-field {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+```
+
+
+## Verification
+
+After mount, run in the console:
+
+**List every rendered field:**
+
+```js
+[...document.querySelectorAll('#data-editor [data-field]')]
+  .map(el => ({
+    field: el.dataset.field,
+    id: el.id,
+    parent: el.parentElement?.className
+  }));
+```
+
+Expected: authored fields show `parent: "field"`, generated fields show `parent: "smq-data-editor-fields smq-data-editor-layout-inline"`.
+
+**Confirm the authored fields were enhanced:**
+
+```js
+['name', 'price', 'active'].map(f => {
+  const el = document.getElementById(f);
+  return {
+    field: f,
+    editable: el?.dataset.editable,
+    bound: el?.dataset.smqDataEditorBound,
+    text: el?.textContent?.trim()
+  };
+});
+```
+
+Expected: `editable: "true"`, `bound: "true"`, and `text` showing the record's value for that field.
+
+**Confirm the generated fields:**
+
+```js
+const container = document.querySelector('#data-editor .smq-data-editor-fields');
+[...container.children].map(el => el.dataset.field);
+```
+
+Expected: the field names that were not authored, in metadata order.
+
+
+## Pitfalls
+
+**1. Mismatched `id`.** If the field is named `productName` in metadata but you author `id="product-name"`, no match occurs. The field is generated instead — and your authored element sits empty.
+
+Check the actual field names first:
+
+```js
+Object.keys(metadata.fields)
+```
+
+**2. Authoring a field that's excluded.** If `createdAt` is in `excludeFields` and you author `<span id="createdAt"></span>`, DataEditor leaves it alone. It stays empty. This is correct behavior — the exclude wins — but it can look like a bug if you forget the field is excluded.
+
+**3. Assuming metadata order.** The generated fields appear in metadata order, but only *after* all authored fields. If you expect `name, description, price` in that order and you've authored `name` and `price`, the render is `name, price, description` — not what metadata order suggests.
+
+**4. Authoring an element for a field that's not in metadata.** No metadata, no enhancement. The element stays as authored. No warning.
+
+**5. Nesting the root incorrectly.** If your authored fields are inside a nested `<div>` within the root, `#name` is still findable via `root.querySelector('#name')`, but the generated container goes to the root, not the nested div. Keep authored fields as direct children, or accept that generated fields will appear at the root level.
+
+
+## Related
+
+- [Auto Mode Overview](AutoFieldMode.md)
+- [Auto Mode with Selected Fields](AutoSelectedFields.md)
+- [Excluding Fields in Auto Mode](ExcludeFields.md)
+- [Existing Mode](../existing/ExistingFieldMode.md) — for when all fields are authored
+
+
+## Summary
+
+- Auto mode enhances matching elements and generates the rest.
+- Matching is by `id` attribute, scoped to the root.
+- Authored fields stay in place; generated fields go into a container appended to the root.
+- Excluded fields are neither enhanced nor generated, regardless of markup.
+- The component code is the same as empty-root auto mode; only the HTML differs.
+
+
+
