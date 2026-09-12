@@ -1,0 +1,85 @@
+@script
+
+import { DataEditor } from '@semantq/data-editor';
+import { Notification } from '@semantq/ql';
+import { isAuthenticated, user } from '/public/auth/js/auth.js';
+import AppConfig from '/public/auth/js/config.js';
+
+const model = 'Product';
+const endpoint = '/Product/Products';
+const recordId = new URLSearchParams(window.location.search).get('rid');
+
+const excludeFields = [
+    'id',
+    'createdAt',
+    'updatedAt'
+];
+
+const userFeatures = user?.features || [];
+
+const canRead   = userFeatures.includes('product_read');
+const canCreate = userFeatures.includes('product_create');
+const canUpdate = userFeatures.includes('product_update');
+const canDelete = userFeatures.includes('product_delete');
+
+$onMount(() => {
+
+    if (!isAuthenticated) {
+        console.log('[Product] User is not authenticated.');
+        return;
+    }
+
+    if (!recordId) {
+        Notification.show({
+            type: 'warning',
+            message: 'A record ID is required to edit this resource.'
+        });
+        return;
+    }
+
+    if (!canRead) {
+        Notification.show({
+            type: 'warning',
+            message: 'You do not have permission to view this resource.'
+        });
+        return;
+    }
+
+    const fullEndpoint = endpoint + '/' + recordId;
+
+    new DataEditor({
+        root: document.getElementById('data-editor'),
+        model: model,
+        endpoint: fullEndpoint,
+        recordId: recordId,
+        baseUrl: AppConfig.BASE_URL,
+        layout: 'inline',
+        fieldMode: 'auto',
+        excludeFields: excludeFields,
+        permissions: {
+            canRead: canRead,
+            canCreate: canCreate,
+            canUpdate: canUpdate,
+            canDelete: canDelete
+        },
+        editable: canUpdate,
+        deletable: canDelete
+    }).mount();
+
+})
+
+@end
+
+
+@style
+
+#data-editor {
+    width: 100%;
+}
+
+@end
+
+
+@html
+
+<div id="data-editor"></div>
