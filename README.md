@@ -57,19 +57,16 @@ The application therefore remains responsible for defining **what resource it is
 
 **Guides**
 
-- [Field Modes and Filtering](docs/AutoFieldMode.md)
-  - [Auto Mode Overview](docs/auto/AutoFieldMode.md)
-  - [Auto Mode with Selected Fields](docs/auto/AutoSelectedFields.md)
-  - [Excluding Fields in Auto Mode](docs/auto/ExcludeFields.md)
-- [Auto Mode in SaaS Contexts](docs/SaaS_DataEditor_Auto_FieldMode.md)
-- [Basic Editor Usage](docs/BasicEditor.md)
-- [Auto Field Mode (extended reference)](docs/DataEditor_Auto_FieldMode.md)
+- [Auto Mode Overview](docs/auto/AutoFieldMode.md)
+- [Auto Mode with Selected Fields](docs/auto/AutoSelectedFields.md)
+- [Excluding Fields in Auto Mode](docs/auto/ExcludeFields.md)
 
 **Templates**
 
 - [Auto Mode Template](templates/auto/AutoMode.smq)
 - [Auto Mode with Selected Fields](templates/auto/SpecificFields.smq)
 - [Auto Mode with Exclude Fields](templates/auto/ExcludeFields.smq)
+
 
 # Overview
 
