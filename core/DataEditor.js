@@ -1,97 +1,114 @@
 import MetadataResolver from './MetadataResolver.js';
 import MutationManager from './MutationManager.js';
 import createDefaultRegistry from './createDefaultRegistry.js';
-import { Notification } from '@semantq/ql';
+import SmQLAdapter from '../api/smQLAdapter.js';
+import { Notification, smQL } from '@semantq/ql';
 import { showFieldStatus } from '../ui/FieldStatus.js';
 
 export default class DataEditor {
   constructor({
-    root = document,
-    metadata = {},
-    api = null,
-    registry = null,
-    themeColor = null,
-    editable = true,
-    deletable = false,
-    model = null,
-    recordId = null,
-    record = null,
-    permissions = null,
-    fieldMode = 'auto',
-    layout = 'stacked',
-    fields = null,
-    onUpdated = () => {},
-    onDeleted = () => {},
-    onError = () => {},
-    onCreated = null
-  } = {}) {
-    this.root = root;
-    this.metadata = metadata || {};
+  root = document,
+  metadata = {},
+  api = null,
+  registry = null,
+  themeColor = null,
+  editable = true,
+  deletable = false,
+  model = null,
+  recordId = null,
+  record = null,
+  permissions = null,
+  fieldMode = 'auto',
+  layout = 'stacked',
+  fields = null,
+  excludeFields = null,
+  onUpdated = () => {},
+  onDeleted = () => {},
+  onError = () => {},
+  onCreated = null,
+  endpoint = null,
+  baseUrl = null
+} = {}) {
+  this.root = root;
+  this.metadata = metadata || {};
 
-    console.log('[DataEditor] Initial metadata:', this.metadata);
+  console.log('[DataEditor] Initial metadata:', this.metadata);
 
-    this.api = api;
-    this.registry = registry || createDefaultRegistry();
-    this.themeColor = themeColor;
-    this.editable = editable;
-    this.deletable = deletable;
-    this.model = model;
-    this.recordId = recordId;
-    this.record = record || {};
-    this.permissions = permissions;
-    this.fieldMode = fieldMode;
-    this.layout = layout;
-    this.fields = fields;
+  this.endpoint = endpoint;
+  this.baseUrl = baseUrl;
 
-    // Normalize fieldMode — add 'targeted' to valid modes
-    const validFieldModes = ['existing', 'generate', 'auto', 'targeted'];
-    if (!validFieldModes.includes(this.fieldMode)) {
-      console.warn(
-        `[DataEditor] Invalid fieldMode "${this.fieldMode}", falling back to "auto".`
-      );
-      this.fieldMode = 'auto';
-    }
-
-    // Normalize layout
-    const validLayouts = ['stacked', 'inline'];
-    if (!validLayouts.includes(this.layout)) {
-      console.warn(
-        `[DataEditor] Invalid layout "${this.layout}", falling back to "stacked".`
-      );
-      this.layout = 'stacked';
-    }
-
-    console.log('[DataEditor] Initial record:', this.record);
-
-    this.onUpdated = onUpdated;
-    this.onDeleted = onDeleted;
-    this.onError = onError;
-    this._onCreated = onCreated;
-
-    this.metadataResolver = new MetadataResolver({
-      metadata: this.metadata,
-      registry: this.registry
+  // Always create API client if baseUrl is provided
+  if (this.baseUrl) {
+    const baseOrigin = new URL(this.baseUrl).origin;
+    this.api = new SmQLAdapter({
+      client: new smQL(baseOrigin),
+      resources: this._buildResources(endpoint)
     });
-
-    this.mutations = api
-      ? new MutationManager({
-          api,
-          onUpdated: (event) => {
-            this._handleUpdateSuccess(event);
-          },
-          onDeleted: (event) => {
-            this._handleDeleteSuccess(event);
-          },
-          onError: (error, payload) => {
-            this._handleMutationError(error, payload);
-          }
-        })
-      : null;
-
-    this.boundElements = new Set();
-    this.activeEditors = new Map();
+  } else if (api) {
+    this.api = api;
+  } else {
+    this.api = null;
   }
 
+  this.registry = registry || createDefaultRegistry();
+  this.themeColor = themeColor;
+  this.editable = editable;
+  this.deletable = deletable;
+  this.model = model;
+  this.recordId = recordId;
+  this.record = record || {};
+  this.permissions = permissions;
+  this.fieldMode = fieldMode;
+  this.layout = layout;
+  this.fields = fields;
+  this.excludeFields = Array.isArray(excludeFields) ? excludeFields : [];
+
+  const validFieldModes = ['existing', 'generate', 'auto', 'targeted'];
+  if (!validFieldModes.includes(this.fieldMode)) {
+    console.warn(
+      `[DataEditor] Invalid fieldMode "${this.fieldMode}", falling back to "auto".`
+    );
+    this.fieldMode = 'auto';
+  }
+
+  const validLayouts = ['stacked', 'inline'];
+  if (!validLayouts.includes(this.layout)) {
+    console.warn(
+      `[DataEditor] Invalid layout "${this.layout}", falling back to "stacked".`
+    );
+    this.layout = 'stacked';
+  }
+
+  console.log('[DataEditor] Initial record:', this.record);
+
+  this.onUpdated = onUpdated;
+  this.onDeleted = onDeleted;
+  this.onError = onError;
+  this._onCreated = onCreated;
+
+  this.metadataResolver = new MetadataResolver({
+    metadata: this.metadata,
+    registry: this.registry
+  });
+
+  this.mutations = this.api
+    ? new MutationManager({
+        api: this.api,
+        onUpdated: (event) => {
+          this._handleUpdateSuccess(event);
+        },
+        onDeleted: (event) => {
+          this._handleDeleteSuccess(event);
+        },
+        onError: (error, payload) => {
+          this._handleMutationError(error, payload);
+        }
+      })
+    : null;
+
+  this.boundElements = new Set();
+  this.activeEditors = new Map();
+}
 
 
  mount() {
@@ -102,30 +119,185 @@ export default class DataEditor {
     return this;
   }
 
-  this._applyTheme();
-  this._renderFields();
-
-  // Apply layout to ALL containers (auto/generate and targeted modes)
-  const containers = this.root.querySelectorAll(
-    '.smq-data-editor-fields, [data-editor-container]'
-  );
-  for (const container of containers) {
-    this._applyLayout(container);
+  if (this.fieldMode === 'auto' && this.endpoint) {
+    this._loadResource()
+      .then((success) => {
+        if (success) {
+          this._render();
+        }
+      })
+      .catch((error) => {
+        console.error('[DataEditor] Failed to load resource:', error);
+        // Only show if _loadResource() didn't already show a notification
+        if (!error._handled) {
+          Notification.show({
+            type: 'error',
+            message: 'Failed to load the record.'
+          });
+        }
+      });
+    return this;
   }
 
-  this._renderEditIndicators();
-  this._renderMetadataFields();
-  this._formatInitialDisplay();
-  this._bindEditableElements();
-
-  if (this._canDelete()) {
-    this._renderDeleteControl();
-  }
-
+  this._render();
   return this;
 }
 
+ async _loadResource() {
+  if (!this.endpoint || typeof this.endpoint !== 'string' || this.endpoint.trim() === '') {
+    Notification.show({
+      type: 'error',
+      message: 'Invalid endpoint configuration.'
+    });
+    return false;
+  }
 
+  if (!this.api) {
+    Notification.show({
+      type: 'error',
+      message: 'No API client available. Please provide baseUrl.'
+    });
+    return false;
+  }
+
+  try {
+    const response = await this.api.get(this.endpoint);
+    const record = this._normalizeResponse(response);
+
+    const hasMetadata = response.metadata && Object.keys(response.metadata.fields || {}).length > 0;
+
+    if (!hasMetadata) {
+      Notification.show({
+        type: 'warning',
+        message: 'Record metadata is unavailable for this resource.'
+      });
+      return false;
+    }
+
+    this.metadata = response.metadata;
+
+    const hasRecord = record && typeof record === 'object' && !Array.isArray(record) && !!record.id;
+
+    if (hasRecord) {
+      this.record = { ...record };
+      delete this.record.metadata;
+      delete this.record._status;
+      delete this.record._ok;
+    } else {
+      this.record = {};
+      this.recordId = 'new-record';
+    }
+
+    return true;
+  } catch (error) {
+    // Network error (offline, DNS, etc.)
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      Notification.show({
+        type: 'error',
+        message: 'Network error. Please check your connection.'
+      });
+      return false;
+    }
+
+    const isNotFound = error.status === 404 || error.response?._status === 404;
+
+    if (isNotFound) {
+      const hasMetadata = error.response?.metadata && Object.keys(error.response.metadata.fields || {}).length > 0;
+
+      if (hasMetadata) {
+        this.metadata = error.response.metadata;
+        this.record = {};
+        this.recordId = 'new-record';
+        return true;
+      }
+
+      Notification.show({
+        type: 'warning',
+        message: 'Record not found. The requested record does not exist.'
+      });
+      return false;
+    }
+
+    console.error('[DataEditor] Failed to load resource:', error);
+    Notification.show({
+      type: 'error',
+      message: 'Failed to load the record.'
+    });
+    return false;
+  }
+}
+
+
+
+
+
+  async _resolveMetadata() {
+    if (this.metadata && Object.keys(this.metadata.fields || {}).length > 0) {
+      return;
+    }
+
+    try {
+      const response = await this.api.get(this.endpoint);
+      if (response?.metadata) {
+        this.metadata = response.metadata;
+        return;
+      }
+    } catch (error) {
+      // Silently fall through
+    }
+
+    this.metadata = { fields: {} };
+  }
+
+  _normalizeResponse(response) {
+  if (!response) return null;
+  return response.data || response.record || response;
+}
+
+  _render() {
+    this._applyTheme();
+    this._renderFields();
+
+    const containers = this.root.querySelectorAll(
+      '.smq-data-editor-fields, [data-editor-container]'
+    );
+    for (const container of containers) {
+      this._applyLayout(container);
+    }
+
+    this._renderEditIndicators();
+    this._renderMetadataFields();
+    this._formatInitialDisplay();
+    this._bindEditableElements();
+
+    if (this._canDelete()) {
+      this._renderDeleteControl();
+    }
+  }
+
+  _buildResources(endpoint) {
+    if (!endpoint || !this.model || !this.recordId) {
+      return {};
+    }
+
+    const id = String(this.recordId);
+    const str = String(endpoint);
+    const suffix = `/${id}`;
+
+    if (!str.endsWith(suffix)) {
+      return {};
+    }
+
+    const collection = str.slice(0, -suffix.length);
+
+    if (!collection) {
+      return {};
+    }
+
+    return {
+      [this.model]: { endpoint: collection }
+    };
+  }
 
   _canRead() {
     if (this.permissions?.canRead === false) return false;
@@ -153,12 +325,6 @@ export default class DataEditor {
     return true;
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Field Discovery
-   * ---------------------------------------------------------
-   */
-
   _findFieldElement(field) {
     if (!field) return null;
     return this.root.querySelector(`#${CSS.escape(field)}`);
@@ -167,12 +333,6 @@ export default class DataEditor {
   _discoverFields() {
     return Object.keys(this.metadata.fields || {});
   }
-
-  /*
-   * ---------------------------------------------------------
-   * Targeted Mode: Discovery & Resolution
-   * ---------------------------------------------------------
-   */
 
   _discoverTargets() {
     const targets = [];
@@ -192,98 +352,79 @@ export default class DataEditor {
   }
 
   _resolveFieldTarget(element) {
-  const model =
-    element.dataset.editorModel ||
-    element.dataset.model;
+    const model = element.dataset.editorModel || element.dataset.model;
+    const fieldName = element.dataset.editorFieldName || element.dataset.field;
+    const relation = element.dataset.editorRelation;
+    const recordId = element.dataset.editorRecordId || element.dataset.recordId;
 
-  const fieldName =
-    element.dataset.editorFieldName ||
-    element.dataset.field;
-
-  const relation =
-    element.dataset.editorRelation;
-
-  const recordId =
-    element.dataset.editorRecordId ||
-    element.dataset.recordId;
-
-  if (!model || !fieldName) {
-    console.warn('[DataEditor] Missing required attributes on field target:', element);
-    return null;
-  }
-
-  // ─── RELATION FIELD ───────────────────────────────
-  if (relation) {
-    const relationMeta = this.metadata.relations?.[relation];
-    if (relationMeta) {
-      const fieldMeta = relationMeta.fields?.[fieldName];
-      if (fieldMeta) {
-        let value = null;
-
-        if (relationMeta.isList === true) {
-          const relationData = Array.isArray(this.record[relation])
-            ? this.record[relation]
-            : [];
-          const item = relationData.find(r => String(r.id) === String(recordId));
-          value = item ? item[fieldName] : null;
-        } else {
-          const relationData = this.record[relation];
-          if (
-            relationData &&
-            typeof relationData === 'object' &&
-            !Array.isArray(relationData)
-          ) {
-            value = relationData[fieldName] ?? null;
-          }
-        }
-
-        return {
-          kind: 'relation',
-          model,
-          recordId,
-          fieldName,
-          relation,
-          isNew: this._isNewRecord(recordId),
-          metadata: fieldMeta,
-          value,
-          relationMetadata: relationMeta,
-          editor: this.metadataResolver.resolveFieldEditor(fieldMeta)
-        };
-      }
+    if (!model || !fieldName) {
+      console.warn('[DataEditor] Missing required attributes on field target:', element);
+      return null;
     }
-    console.warn(`[DataEditor] Relation "${relation}" or field "${fieldName}" not found.`);
+
+    if (relation) {
+      const relationMeta = this.metadata.relations?.[relation];
+      if (relationMeta) {
+        const fieldMeta = relationMeta.fields?.[fieldName];
+        if (fieldMeta) {
+          let value = null;
+
+          if (relationMeta.isList === true) {
+            const relationData = Array.isArray(this.record[relation])
+              ? this.record[relation]
+              : [];
+            const item = relationData.find(r => String(r.id) === String(recordId));
+            value = item ? item[fieldName] : null;
+          } else {
+            const relationData = this.record[relation];
+            if (
+              relationData &&
+              typeof relationData === 'object' &&
+              !Array.isArray(relationData)
+            ) {
+              value = relationData[fieldName] ?? null;
+            }
+          }
+
+          return {
+            kind: 'relation',
+            model,
+            recordId,
+            fieldName,
+            relation,
+            isNew: this._isNewRecord(recordId),
+            metadata: fieldMeta,
+            value,
+            relationMetadata: relationMeta,
+            editor: this.metadataResolver.resolveFieldEditor(fieldMeta)
+          };
+        }
+      }
+      console.warn(`[DataEditor] Relation "${relation}" or field "${fieldName}" not found.`);
+      return null;
+    }
+
+    const fieldMeta = this.metadata.fields?.[fieldName];
+    if (fieldMeta) {
+      return {
+        kind: 'field',
+        model,
+        recordId,
+        fieldName,
+        isNew: this._isNewRecord(recordId),
+        metadata: fieldMeta,
+        value: this.record[fieldName],
+        editor: this.metadataResolver.resolveFieldEditor(fieldMeta)
+      };
+    }
+
+    console.warn(`[DataEditor] Field "${fieldName}" not found in metadata.`);
     return null;
   }
-
-  // ─── CORE FIELD ────────────────────────────────────
-  const fieldMeta = this.metadata.fields?.[fieldName];
-  if (fieldMeta) {
-    return {
-      kind: 'field',
-      model,
-      recordId,
-      fieldName,
-      isNew: this._isNewRecord(recordId),
-      metadata: fieldMeta,
-      value: this.record[fieldName],
-      editor: this.metadataResolver.resolveFieldEditor(fieldMeta)
-    };
-  }
-
-  console.warn(`[DataEditor] Field "${fieldName}" not found in metadata.`);
-  return null;
-}
-
-  /*
-   * ---------------------------------------------------------
-   * Field Enhancement & Generation
-   * ---------------------------------------------------------
-   */
 
   _enhanceExistingField(element, field, fieldMetadata) {
     if (!element || !field) return;
 
-    // Preserve developer markup — find or create value target
     let valueTarget = element.querySelector('.smq-data-editor-value-target');
     if (!valueTarget && element.children.length === 0) {
       valueTarget = element;
@@ -294,11 +435,9 @@ export default class DataEditor {
       element.appendChild(valueTarget);
     }
 
-    // Set formatted value
     const value = this.record[field];
     valueTarget.textContent = this._formatDisplayValue(value, fieldMetadata);
 
-    // Add DataEditor behavior
     element.classList.add('smq-data-editable');
     element.dataset.field = field;
     element.dataset.model = this.model || '';
@@ -361,24 +500,14 @@ export default class DataEditor {
     return wrapper;
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Main Field Renderer
-   * ---------------------------------------------------------
-   */
-
   _renderFields() {
-    // ─── TARGETED MODE ────────────────────────────
-    // Component owns DOM. DataEditor only discovers and activates targets.
     if (this.fieldMode === 'targeted') {
       this._renderTargetedFields();
       return;
     }
 
-    // ─── LEGACY MODES ─────────────────────────────
-    // auto, generate, existing — unchanged behavior
-
     const fields = this.metadata.fields || {};
+    const exclude = new Set(this.excludeFields);
 
     let fieldEntries;
 
@@ -388,10 +517,11 @@ export default class DataEditor {
       this.fields.length > 0
     ) {
       fieldEntries = this.fields
-        .filter(field => fields[field])
+        .filter(field => fields[field] && !exclude.has(field))
         .map(field => [field, fields[field]]);
     } else {
-      fieldEntries = Object.entries(fields);
+      fieldEntries = Object.entries(fields)
+        .filter(([field]) => !exclude.has(field));
     }
 
     if (this.fieldMode === 'existing') {
@@ -406,7 +536,6 @@ export default class DataEditor {
       return;
     }
 
-    // For 'generate' and 'auto' modes, get or create container
     let container = this.root.querySelector('.smq-data-editor-fields');
     let needsContainer = this.fieldMode === 'generate';
 
@@ -428,7 +557,6 @@ export default class DataEditor {
       const existing = this._findFieldElement(field);
 
       if (this.fieldMode === 'generate') {
-        // Idempotent: check if already generated
         const existingGenerated = container?.querySelector(
           `.smq-data-editor-field[data-field="${CSS.escape(field)}"]`
         );
@@ -442,7 +570,6 @@ export default class DataEditor {
         if (existing) {
           this._enhanceExistingField(existing, field, fieldMetadata);
         } else if (container) {
-          // Idempotent: check if already generated
           const existingGenerated = container.querySelector(
             `.smq-data-editor-field[data-field="${CSS.escape(field)}"]`
           );
@@ -457,19 +584,12 @@ export default class DataEditor {
     }
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Targeted Mode: Render Fields
-   * ---------------------------------------------------------
-   */
-
   _renderTargetedFields() {
     const targets = this._discoverTargets();
 
     for (const target of targets) {
       const { element, fieldName, metadata, value, kind, model, recordId, isNew } = target;
 
-      // Format and set display value
       const formatted = this._formatDisplayValue(value, metadata);
 
       if (element.children.length === 0) {
@@ -484,14 +604,12 @@ export default class DataEditor {
         targetEl.textContent = formatted;
       }
 
-      // Check if editable
       const canEdit = this._canEditField(fieldName, metadata);
       if (canEdit) {
         element.classList.add('smq-data-editable');
         element.dataset.field = fieldName;
         element.dataset.model = model;
 
-        // 🔥 Set record-id with sentinel for new records
         if (isNew) {
           element.dataset.recordId = 'new-record';
           element.dataset.editorRecordId = 'new-record';
@@ -503,22 +621,14 @@ export default class DataEditor {
           delete element.dataset.editorRecordId;
         }
 
-        // Store relation info for commit
         if (kind === 'relation') {
           element.dataset.editorRelation = target.relation;
         }
 
-        // Mark as editable for binding
         element.dataset.editable = 'true';
       }
     }
   }
-
-  /*
-   * ---------------------------------------------------------
-   * Layout
-   * ---------------------------------------------------------
-   */
 
   _applyLayout(container) {
     if (!container) return;
@@ -537,18 +647,11 @@ export default class DataEditor {
     container.dataset.layout = this.layout || 'stacked';
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Edit Indicator (Pencil)
-   * ---------------------------------------------------------
-   */
-
   _renderEditIndicators() {
     if (!this._canUpdate()) return;
 
     let elements;
 
-    // Targeted mode: use discovered targets
     if (this.fieldMode === 'targeted') {
       const targets = this._discoverTargets();
       elements = targets
@@ -565,7 +668,6 @@ export default class DataEditor {
       const fieldMetadata = this.metadata.fields?.[field] || {};
       if (!this._canEditField(field, fieldMetadata)) continue;
 
-      // Check if indicator already exists
       if (element.parentElement?.querySelector('.smq-data-editor-indicator')) {
         continue;
       }
@@ -576,7 +678,6 @@ export default class DataEditor {
       indicator.textContent = '✎';
       indicator.setAttribute('aria-label', `Edit ${field}`);
 
-      // Use the captured element directly
       indicator.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -590,12 +691,6 @@ export default class DataEditor {
       parent.appendChild(indicator);
     }
   }
-
-  /*
-   * ---------------------------------------------------------
-   * Delete Control
-   * ---------------------------------------------------------
-   */
 
   _renderDeleteControl() {
     if (!this._canDelete()) return;
@@ -629,15 +724,8 @@ export default class DataEditor {
     });
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Metadata fields
-   * ---------------------------------------------------------
-   */
-
   _renderMetadataFields() {
-    const elements =
-      this.root.querySelectorAll?.('[data-metadata-field]') || [];
+    const elements = this.root.querySelectorAll?.('[data-metadata-field]') || [];
 
     console.log('[DataEditor] Metadata placeholders:', elements.length);
 
@@ -675,8 +763,7 @@ export default class DataEditor {
 
       const value = this.record[field];
 
-      const displayMetadata =
-        this.metadata.fields?.[element.dataset.field] || {};
+      const displayMetadata = this.metadata.fields?.[element.dataset.field] || {};
 
       if (field === 'attributes') {
         console.log('[DataEditor] ATTRIBUTES RENDER TRACE:', {
@@ -708,15 +795,8 @@ export default class DataEditor {
     });
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Editable fields
-   * ---------------------------------------------------------
-   */
-
   _formatInitialDisplay() {
-    const elements =
-      this.root.querySelectorAll?.('.smq-data-editable') || [];
+    const elements = this.root.querySelectorAll?.('.smq-data-editable') || [];
 
     console.log('[DataEditor] Formatting initial display:', elements.length);
 
@@ -783,7 +863,6 @@ export default class DataEditor {
 
     let elements;
 
-    // Targeted mode: use discovered targets
     if (this.fieldMode === 'targeted') {
       const targets = this._discoverTargets();
       elements = targets
@@ -809,14 +888,10 @@ export default class DataEditor {
       });
 
       element.addEventListener('click', (event) => {
-        // Allow active editor controls to handle their own clicks.
-        // This is required for native controls such as:
-        // datetime-local, date, time, select, checkbox, etc.
         if (event.target?.closest?.('.smq-data-editor-control')) {
           return;
         }
 
-        // Check if field is editable
         const field = element.dataset.field;
         const fieldMetadata = this.metadata.fields?.[field] || {};
         if (!this._canEditField(field, fieldMetadata)) {
@@ -844,39 +919,23 @@ export default class DataEditor {
       return null;
     }
 
-    const field =
-      element.dataset.field ||
-      element.dataset.editorFieldName;
-
-    const model =
-      element.dataset.model ||
-      element.dataset.editorModel;
-
-    const recordId =
-      element.dataset.recordId ||
-      element.dataset.editorRecordId ||
-      null;
-
-    const relation =
-      element.dataset.editorRelation;
+    const field = element.dataset.field || element.dataset.editorFieldName;
+    const model = element.dataset.model || element.dataset.editorModel;
+    const recordId = element.dataset.recordId || element.dataset.editorRecordId || null;
+    const relation = element.dataset.editorRelation;
 
     if (!model || !field) {
       return null;
     }
 
-    // Relation fields are resolved from relation metadata.
-    // A missing recordId or "new-record" means the relation item is new,
-    // not that the field metadata is missing.
     if (relation) {
-      const relationMeta =
-        this.metadata.relations?.[relation];
+      const relationMeta = this.metadata.relations?.[relation];
 
       if (!relationMeta) {
         return null;
       }
 
-      const fieldMeta =
-        relationMeta.fields?.[field];
+      const fieldMeta = relationMeta.fields?.[field];
 
       if (!fieldMeta) {
         return null;
@@ -895,9 +954,7 @@ export default class DataEditor {
       };
     }
 
-    // Normal Resident field.
-    const fieldMeta =
-      this.metadata.fields?.[field];
+    const fieldMeta = this.metadata.fields?.[field];
 
     if (!fieldMeta) {
       return null;
@@ -913,12 +970,6 @@ export default class DataEditor {
       editor: this.metadataResolver.resolveFieldEditor(fieldMeta)
     };
   }
-
-  /*
-   * ---------------------------------------------------------
-   * Editor lifecycle
-   * ---------------------------------------------------------
-   */
 
   editElement(element) {
     if (!element) {
@@ -1023,12 +1074,6 @@ export default class DataEditor {
     editor.focus?.();
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Mutation lifecycle
-   * ---------------------------------------------------------
-   */
-
   _valuesEqual(value, originalValue, metadata = {}) {
     if (value === originalValue) {
       return true;
@@ -1040,8 +1085,7 @@ export default class DataEditor {
 
     if (metadata.type === 'DateTime') {
       const valueTime = value == null ? null : new Date(value).getTime();
-      const originalTime =
-        originalValue == null ? null : new Date(originalValue).getTime();
+      const originalTime = originalValue == null ? null : new Date(originalValue).getTime();
 
       if (!Number.isNaN(valueTime) && !Number.isNaN(originalTime)) {
         return valueTime === originalTime;
@@ -1073,11 +1117,7 @@ export default class DataEditor {
     return resolved?.value;
   }
 
-
-
-  
- async _commitElement(element, value, originalValue) {
-    // Use the element's own identity directly — NO inference
+  async _commitElement(element, value, originalValue) {
     const model = element.dataset.model || element.dataset.editorModel;
     const recordId = element.dataset.recordId || element.dataset.editorRecordId || null;
     const field = element.dataset.field || element.dataset.editorFieldName;
@@ -1095,10 +1135,8 @@ export default class DataEditor {
       isList: relationMeta?.isList
     });
 
-    // ─── UPDATE LOCAL STATE ───────────────────────────────
     if (relation && !isNew && recordId) {
       if (relationMeta?.isList === true) {
-        // To-many: find in array
         const relationData = this.record[relation] || [];
         const itemIndex = relationData.findIndex(r => r.id === recordId);
         if (itemIndex !== -1) {
@@ -1109,7 +1147,6 @@ export default class DataEditor {
           this.record[relation].push(newItem);
         }
       } else {
-        // To-one: direct object
         const relationData = this.record[relation];
         if (relationData && typeof relationData === 'object' && !Array.isArray(relationData)) {
           relationData[field] = value;
@@ -1118,23 +1155,18 @@ export default class DataEditor {
         }
       }
     } else if (relation && isNew) {
-      // New relation item — add to local state (temporary)
       const newItem = { [field]: value };
-      
+
       if (relationMeta?.isList === true) {
-        // To-many: push to array
         if (!this.record[relation]) this.record[relation] = [];
         this.record[relation].push(newItem);
       } else {
-        // To-one: assign directly
         this.record[relation] = newItem;
       }
     } else {
-      // Core field
       this.record[field] = value;
     }
 
-    // ─── BUILD PAYLOAD ──────────────────────────────────────
     const metadata =
       relationMeta?.fields?.[field] ||
       this.metadata.fields?.[field] ||
@@ -1147,7 +1179,6 @@ export default class DataEditor {
       return;
     }
 
-    // ─── SEND TO API ────────────────────────────────────────
     if (!this.mutations) {
       this._finishEdit(element, value);
       return;
@@ -1155,16 +1186,13 @@ export default class DataEditor {
 
     try {
       if (isNew && relation) {
-        // ─── CREATE NEW RELATION ──────────────────────────
         const createData = {
           [field]: value
         };
 
-        // Get foreign key from relation metadata
         if (relationMeta && relationMeta.foreignKey) {
           createData[relationMeta.foreignKey] = this.recordId;
         } else {
-          // Fallback: derive from parent model name
           const parentModel = this.model || model;
           const fkField = `${parentModel.toLowerCase()}Id`;
           if (this.recordId) {
@@ -1181,7 +1209,6 @@ export default class DataEditor {
 
         const result = await this.mutations.create(createPayload);
 
-        // Replace the temporary item with the created record (with real ID)
         if (result && result.id) {
           if (relationMeta?.isList === true) {
             const relationData = this.record[relation] || [];
@@ -1195,19 +1222,15 @@ export default class DataEditor {
             this.record[relation] = result;
           }
 
-          // Update the DOM element's record ID
           if (element) {
             element.dataset.recordId = result.id;
             element.dataset.editorRecordId = result.id;
           }
 
-          // Propagate ID to ALL fields in the same record group
           const group = element.closest('[data-editor-record-group]');
           if (group) {
-            // Update the group's identity
             group.dataset.editorRecordGroup = `${relation}:${result.id}`;
 
-            // Update every field belonging to this record
             const targets = group.querySelectorAll('[data-editor-field]');
             targets.forEach((el) => {
               el.dataset.recordId = result.id;
@@ -1220,14 +1243,11 @@ export default class DataEditor {
         this._notifySuccess(field);
 
       } else if (isNew && !relation) {
-        // ─── CREATE NEW CORE RECORD ──────────────────────
-        // Build create data from existing record state + the edited field
         const createData = {
           ...this.record,
           [field]: value
         };
 
-        // Remove any internal/transient fields
         delete createData.id;
         delete createData.metadata;
         delete createData._status;
@@ -1243,16 +1263,13 @@ export default class DataEditor {
         const result = await this.mutations.create(createPayload);
 
         if (result && result.id) {
-          // CRITICAL: Transition from CREATE to EXISTING
           this.recordId = result.id;
 
-          // Update local state with the new record
           this.record = {
             ...result,
             metadata: this.record.metadata
           };
 
-          // CRITICAL: Update BOTH types of targets
           const targets = this.root.querySelectorAll(
             '[data-editor-field], .smq-data-editable'
           );
@@ -1267,7 +1284,6 @@ export default class DataEditor {
             }
           }
 
-          // Notify component of creation
           if (this._onCreated && typeof this._onCreated === 'function') {
             this._onCreated(result);
           }
@@ -1277,7 +1293,6 @@ export default class DataEditor {
         this._notifySuccess(field);
 
       } else {
-        // ─── UPDATE EXISTING RECORD ────────────────────────
         const payload = {
           model,
           recordId,
@@ -1293,7 +1308,6 @@ export default class DataEditor {
     } catch (error) {
       console.error('[DataEditor] Mutation rejected:', error);
 
-      // ─── ROLLBACK ─────────────────────────────────────────
       if (relation && !isNew && recordId) {
         if (relationMeta?.isList === true) {
           const relationData = this.record[relation] || [];
@@ -1319,7 +1333,6 @@ export default class DataEditor {
             }
           }
         } else {
-          // To-one: set to null
           this.record[relation] = null;
         }
       } else {
@@ -1329,8 +1342,6 @@ export default class DataEditor {
       throw error;
     }
   }
-
-  
 
   _handleUpdateSuccess(event = {}) {
     const { model, recordId, field, value, response } = event;
@@ -1350,25 +1361,14 @@ export default class DataEditor {
       response
     });
 
-    const element =
-      this._findEditableElement(
-        model,
-        recordId,
-        field
-      );
-
-    const relation =
-      element?.dataset.editorRelation || null;
+    const element = this._findEditableElement(model, recordId, field);
+    const relation = element?.dataset.editorRelation || null;
 
     if (relation) {
       const relationMeta = this.metadata.relations?.[relation];
-
-      const relationRecordId =
-        element.dataset.editorRelationRecordId ||
-        recordId;
+      const relationRecordId = element.dataset.editorRelationRecordId || recordId;
 
       if (relationMeta?.isList === true) {
-        // To-many relation: local state is an array.
         const relationData = Array.isArray(this.record[relation])
           ? this.record[relation]
           : [];
@@ -1385,7 +1385,6 @@ export default class DataEditor {
           );
         }
       } else {
-        // To-one relation: local state is a single object.
         const relationData = this.record[relation];
 
         if (
@@ -1413,15 +1412,6 @@ export default class DataEditor {
     this.onUpdated(response, payload);
   }
 
-
-
-  /*
-   * ---------------------------------------------------------
-   * Delete success
-   * ---------------------------------------------------------
-   */
-
-
   _handleDeleteSuccess(event = {}) {
     const { model, recordId, response } = event;
 
@@ -1439,12 +1429,6 @@ export default class DataEditor {
     this.onDeleted(response, payload);
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Mutation error
-   * ---------------------------------------------------------
-   */
-
   _handleMutationError(error, payload) {
     console.error('[DataEditor] Mutation failed:', {
       error,
@@ -1454,12 +1438,6 @@ export default class DataEditor {
     this._notifyError(error);
     this.onError(error, payload);
   }
-
-  /*
-   * ---------------------------------------------------------
-   * Notifications
-   * ---------------------------------------------------------
-   */
 
   _notifySuccess(field = null, message = null) {
     const text =
@@ -1501,12 +1479,6 @@ export default class DataEditor {
       .replace(/^./, (character) => character.toUpperCase());
   }
 
-  /*
-   * ---------------------------------------------------------
-   * Locate active DOM field
-   * ---------------------------------------------------------
-   */
-
   _findEditableElement(model, recordId, field) {
     const elements = this.root.querySelectorAll?.('.smq-data-editable') || [];
 
@@ -1543,10 +1515,7 @@ export default class DataEditor {
 
     if (fieldMetadata?.editor === 'key-value') {
       const fields = fieldMetadata.structure?.fields || {};
-      const values =
-        value && typeof value === 'object' && !Array.isArray(value)
-          ? value
-          : {};
+      const values = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 
       return Object.keys(fields)
         .map((key) => `${key}: ${values[key] ?? ''}`)
@@ -1559,12 +1528,6 @@ export default class DataEditor {
 
     return String(value);
   }
-
-  /*
-   * ---------------------------------------------------------
-   * Finish editing
-   * ---------------------------------------------------------
-   */
 
   _finishEdit(element, value) {
     this.activeEditors.delete(element);
@@ -1583,12 +1546,6 @@ export default class DataEditor {
       value
     });
   }
-
-  /*
-   * ---------------------------------------------------------
-   * Theme
-   * ---------------------------------------------------------
-   */
 
   _applyTheme() {
     if (!this.themeColor || !this.root) {
@@ -1618,8 +1575,7 @@ export default class DataEditor {
 
     const value = parseInt(hex.slice(1), 16);
 
-    const clamp = (number) =>
-      Math.max(0, Math.min(255, number));
+    const clamp = (number) => Math.max(0, Math.min(255, number));
 
     const r = clamp((value >> 16) + amount);
     const g = clamp(((value >> 8) & 255) + amount);
@@ -1643,12 +1599,6 @@ export default class DataEditor {
 
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
-
-  /*
-   * ---------------------------------------------------------
-   * Destroy
-   * ---------------------------------------------------------
-   */
 
   destroy() {
     this.boundElements.forEach((element) => {
