@@ -15,3 +15,9 @@ core/WORKED_DataEditor.js
 
 # Scratch / reference copies
 core/WORKED_DataEditor.js
+
+# Patch script backups
+core/*.bak
+core/*.bak[0-9]
+api/*.bak
+api/*.bak[0-9]
