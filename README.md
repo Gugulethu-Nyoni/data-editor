@@ -64,6 +64,7 @@ The application therefore remains responsible for defining **what resource it is
 - [Existing Mode](docs/existing/ExistingMode.md)
 - [Generate Mode](docs/generate/GenerateFieldMode.md)
 - [Targeted Mode](docs/targeted/TargetedMode.md)
+- [Permissions in SaaS Contexts](docs/SaaS/AutoModePermissions.md)
 
 **Templates**
 
@@ -74,6 +75,7 @@ The application therefore remains responsible for defining **what resource it is
 - [Existing Mode Template](templates/existing/ExistingMode.smq)
 - [Generate Mode Template](templates/generate/GenerateMode.smq)
 - [Targeted Mode Template](templates/targeted/TargetedMode.smq)
+- [SaaS Auto Mode with Permissions](templates/SaaS/AutoModeSaaS.smq)
 
 
 # Overview
