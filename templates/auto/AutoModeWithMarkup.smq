@@ -1,0 +1,81 @@
+@script
+
+import { DataEditor } from '@semantq/data-editor';
+import { Notification } from '@semantq/ql';
+import AppConfig from '/public/auth/js/config.js';
+
+const model = 'Product';
+const endpoint = '/Product/Products';
+const recordId = new URLSearchParams(window.location.search).get('rid');
+
+const excludeFields = [
+    'id',
+    'createdAt',
+    'updatedAt'
+];
+
+$onMount(() => {
+
+    if (!recordId) {
+        Notification.show({
+            type: 'warning',
+            message: 'A record ID is required to edit this resource.'
+        });
+        return;
+    }
+
+    const fullEndpoint = endpoint + '/' + recordId;
+
+    new DataEditor({
+        root: document.getElementById('data-editor'),
+        model: model,
+        endpoint: fullEndpoint,
+        recordId: recordId,
+        baseUrl: AppConfig.BASE_URL,
+        layout: 'inline',
+        fieldMode: 'auto',
+        excludeFields: excludeFields
+    }).mount();
+
+})
+
+@end
+
+
+@style
+
+#data-editor {
+    width: 100%;
+}
+
+#data-editor .field {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+#data-editor .smq-data-editor-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+@end
+
+
+@html
+
+<div id="data-editor">
+  <div class="field">
+    <label>name</label>
+    <span id="name"></span>
+  </div>
+  <div class="field">
+    <label>price</label>
+    <span id="price"></span>
+  </div>
+  <div class="field">
+    <label>active</label>
+    <span id="active"></span>
+  </div>
+</div>
