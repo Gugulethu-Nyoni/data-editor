@@ -57,7 +57,7 @@ The application therefore remains responsible for defining **what resource it is
 
 **Guides**
 
-- [Field Modes and Filtering](blob/main/docs/AutoFieldMode.md)
+- [Field Modes and Filtering](docs/AutoFieldMode.md)
   - [Auto Mode Overview](blob/main/docs/auto/AutoFieldMode.md)
   - [Auto Mode with Selected Fields](blob/main/docs/auto/AutoSelectedFields.md)
   - [Excluding Fields in Auto Mode](blob/main/docs/auto/ExcludeFields.md)
