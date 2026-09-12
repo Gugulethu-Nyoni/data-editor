@@ -63,6 +63,7 @@ The application therefore remains responsible for defining **what resource it is
 - [Auto Mode with Existing Markup](docs/auto/AutoWithMarkup.md)
 - [Existing Mode](docs/existing/ExistingMode.md)
 - [Generate Mode](docs/generate/GenerateFieldMode.md)
+- [Targeted Mode](docs/targeted/TargetedMode.md)
 
 **Templates**
 
@@ -72,6 +73,7 @@ The application therefore remains responsible for defining **what resource it is
 - [Auto Mode with Existing Markup](templates/auto/AutoModeWithMarkup.smq)
 - [Existing Mode Template](templates/existing/ExistingMode.smq)
 - [Generate Mode Template](templates/generate/GenerateMode.smq)
+- [Targeted Mode Template](templates/targeted/TargetedMode.smq)
 
 
 # Overview
