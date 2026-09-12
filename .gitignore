@@ -8,3 +8,10 @@ ARCHIVE/
 
 # Scratch / reference copies
 core/WORKED_DataEditor.js
+
+# Patch script backups
+*.bak
+*.bak2
+
+# Scratch / reference copies
+core/WORKED_DataEditor.js
