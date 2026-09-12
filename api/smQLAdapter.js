@@ -43,6 +43,10 @@ export default class SmQLAdapter {
     return word + 's';
   }
 
+  async get(path) {
+    return this.client.get(path);
+  }
+
   async create({
     model,
     data
