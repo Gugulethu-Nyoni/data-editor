@@ -151,6 +151,155 @@ Instead of writing field-specific edit logic for every resource, applications pr
 
 `@semantq/data-editor` provides inline editing for data rendered in a Semantq application.
 
+
+## The simplest possible editor
+
+The example below captures the essence and ultimate delievrable of DataEditor - which is to save you time as a developer fiddlindg with CRUD api calls and UIs. 
+
+Eight lines of configuration. One empty container. Every field rendered and editable from metadata alone.
+
+```semantq
+@script
+
+import { DataEditor } from '@semantq/data-editor';
+import { Notification } from '@semantq/ql';
+import AppConfig from '/public/auth/js/config.js';
+
+const model = 'Product';
+const endpoint = '/Product/Products';
+const recordId = new URLSearchParams(window.location.search).get('rid');
+
+$onMount(() => {
+
+    if (!recordId) {
+        Notification.show({
+            type: 'warning',
+            message: 'A record ID is required to edit this resource.'
+        });
+        return;
+    }
+
+    const fullEndpoint = endpoint + '/' + recordId;
+
+    new DataEditor({
+        root: document.getElementById('data-editor'),
+        model: model,
+        endpoint: fullEndpoint,
+        recordId: recordId,
+        baseUrl: AppConfig.BASE_URL,
+        layout: 'inline',
+        fieldMode: 'auto'
+    }).mount();
+
+})
+
+@end
+
+
+@style
+
+#data-editor {
+    width: 100%;
+}
+
+@end
+
+
+@html
+
+<div id="data-editor"></div>
+```
+
+That's the whole component. The record is fetched, the metadata is resolved, every field is rendered with the appropriate editor, and edits are persisted — without the component knowing anything about the schema.
+
+The component is also reusable- all you would need to modify is:
+
+```
+const model = 'Product';
+const endpoint = '/Product/Products';
+```
+
+The container is empty. DataEditor generates everything. If you want to hand-place a few fields and let DataEditor fill in the rest, the container isn't empty — and you're using the same `auto` mode with a different HTML shape. That variant is documented and templated too.
+
+## Choosing a mode
+
+DataEditor has four rendering modes. The choice depends on how much control the component wants over field layout.
+
+| Mode | Reads DOM | Field set from | Use when |
+|---|---|---|---|
+| [`auto`](docs/auto/AutoFieldMode.md) | Enhances matching `#id` elements | Metadata | **Default.** Metadata-driven rendering; optionally enhance authored markup. |
+| [`existing`](docs/existing/ExistingMode.md) | Enhances matching `#id` elements only | Metadata | Every field is authored in the template; missing fields should warn. |
+| [`generate`](docs/generate/GenerateFieldMode.md) | Ignores DOM entirely | Metadata | Root is empty; output must be deterministic. |
+| [`targeted`](docs/targeted/TargetedMode.md) | Reads `[data-editor-target]` and `[data-editor-field]` | `fieldLayout` | Fields must be grouped into named sections. |
+
+### Field filtering
+
+Two independent options narrow which fields render, in any metadata-driven mode:
+
+| Option | Direction | Use when |
+|---|---|---|
+| [`fields`](docs/auto/AutoSelectedFields.md) | Allowlist | Show a small minority of fields. |
+| [`excludeFields`](docs/auto/ExcludeFields.md) | Denylist | Hide a small minority of fields. |
+
+When both are supplied: allowlist first, then denylist trims the result.
+
+### Layout
+
+| Value | Effect |
+|---|---|
+| `inline` | Label, value, and edit indicator on one row. |
+| `stacked` | Label above; value and indicator on a row beneath. |
+
+Below 600px viewport width, both collapse to stacked.
+
+### Permissions
+
+Optional. Deny-only. Absence means permitted.
+
+```js
+permissions: {
+  canRead:   true,
+  canUpdate: userFeatures.includes('product_update'),
+  canDelete: userFeatures.includes('product_delete')
+}
+```
+
+See [Permissions in SaaS Contexts](docs/SaaS/AutoModePermissions.md) for the full contract.
+
+## Templates by mode
+
+Copy-paste starting points, one per combination.
+
+### Auto mode
+
+The four auto templates differ only in how the container and filters are declared. The component code is otherwise identical.
+
+| Template | Container | Filter | Purpose |
+|---|---|---|---|
+| [`AutoMode.smq`](templates/auto/AutoMode.smq) | Empty | None | Render every metadata field. The eight-line baseline. |
+| [`SpecificFields.smq`](templates/auto/SpecificFields.smq) | Empty | `fields` | Show only a named subset. |
+| [`ExcludeFields.smq`](templates/auto/ExcludeFields.smq) | Empty | `excludeFields` | Hide a named subset, render the rest. |
+| [`AutoModeWithMarkup.smq`](templates/auto/AutoModeWithMarkup.smq) | Partially authored | None | Enhance authored fields in place, generate the rest. |
+
+`AutoModeWithMarkup.smq` is the mixed variant: the component authors a few fields as `#id`-matched elements, and DataEditor enhances those while generating every other metadata field into a container appended to the root. Use it when a designer wants specific fields laid out a particular way, but the rest can flow automatically.
+
+### Other modes
+
+| Mode | Template |
+|---|---|
+| `existing` | [`templates/existing/ExistingMode.smq`](templates/existing/ExistingMode.smq) |
+| `generate` | [`templates/generate/GenerateMode.smq`](templates/generate/GenerateMode.smq) |
+| `targeted` | [`templates/targeted/TargetedMode.smq`](templates/targeted/TargetedMode.smq) |
+
+### Permissions
+
+| Template | Purpose |
+|---|---|
+| [`AutoModeSaaS.smq`](templates/SaaS/AutoModeSaaS.smq) | Auto mode with capability-derived permissions. |
+
+Each template is a complete Semantq component. The eight-line `auto` component above is the shortest path to a working editor.
+
+
 A typical data view might contain:
 
 ```html
