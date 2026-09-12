@@ -62,6 +62,7 @@ The application therefore remains responsible for defining **what resource it is
 - [Excluding Fields in Auto Mode](docs/auto/ExcludeFields.md)
 - [Auto Mode with Existing Markup](docs/auto/AutoWithMarkup.md)
 - [Existing Mode](docs/existing/ExistingMode.md)
+- [Generate Mode](docs/generate/GenerateFieldMode.md)
 
 **Templates**
 
@@ -70,6 +71,7 @@ The application therefore remains responsible for defining **what resource it is
 - [Auto Mode with Exclude Fields](templates/auto/ExcludeFields.smq)
 - [Auto Mode with Existing Markup](templates/auto/AutoModeWithMarkup.smq)
 - [Existing Mode Template](templates/existing/ExistingMode.smq)
+- [Generate Mode Template](templates/generate/GenerateMode.smq)
 
 
 # Overview
