@@ -60,13 +60,14 @@ The application therefore remains responsible for defining **what resource it is
 - [Auto Mode Overview](docs/auto/AutoFieldMode.md)
 - [Auto Mode with Selected Fields](docs/auto/AutoSelectedFields.md)
 - [Excluding Fields in Auto Mode](docs/auto/ExcludeFields.md)
+- [Auto Mode with Existing Markup](docs/auto/AutoWithMarkup.md)
 
 **Templates**
 
 - [Auto Mode Template](templates/auto/AutoMode.smq)
 - [Auto Mode with Selected Fields](templates/auto/SpecificFields.smq)
 - [Auto Mode with Exclude Fields](templates/auto/ExcludeFields.smq)
-
+- [Auto Mode with Existing Markup](templates/auto/AutoModeWithMarkup.smq)
 
 # Overview
 
