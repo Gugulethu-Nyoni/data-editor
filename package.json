@@ -1,6 +1,6 @@
 {
   "name": "@semantq/data-editor",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Framework-agnostic metadata-driven data editing UI for Semantq applications.",
   "type": "module",
   "main": "./index.js",
