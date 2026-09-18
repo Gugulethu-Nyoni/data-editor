@@ -1,5 +1,7 @@
 # @semantq/data-editor (Update)
 
+Add typecaster integration
+
 A metadata-driven, inline data editor for Semantq applications.
 
 `@semantq/data-editor` turns rendered data into editable fields using field metadata and a registry of editor components. It provides a consistent editing lifecycle for scalar values, structured values, native browser controls, validation, mutation, and display restoration.
