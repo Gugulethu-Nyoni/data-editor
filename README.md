@@ -1,6 +1,7 @@
 # @semantq/data-editor (Update)
 
 Add typecaster integration
+Add data-editor - typecaster contract docs
 
 A metadata-driven, inline data editor for Semantq applications.
 
