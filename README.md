@@ -2,6 +2,7 @@
 
 Add typecaster integration
 Add data-editor - typecaster contract docs (works with typecasters)
+Keep framework agnostic
 
 A metadata-driven, inline data editor for Semantq applications.
 
