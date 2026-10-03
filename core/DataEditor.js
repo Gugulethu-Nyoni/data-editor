@@ -28,7 +28,8 @@ export default class DataEditor {
   onError = () => {},
   onCreated = null,
   endpoint = null,
-  baseUrl = null
+  baseUrl = null,
+  collectionEndpoint = null
 } = {}) {
   this.root = root;
   this.metadata = metadata || {};
@@ -37,12 +38,20 @@ export default class DataEditor {
 
   this.endpoint = endpoint;
   this.baseUrl = baseUrl;
+  this.collectionEndpoint = collectionEndpoint;
+
+  this.isCollection = false;
+  this.records = [];
+  this.childEditors = [];
 
   // Always create API client if baseUrl is provided
   if (this.baseUrl) {
     const baseOrigin = new URL(this.baseUrl).origin;
+
+    this.smqlClient = new smQL(baseOrigin);
+
     this.api = new SmQLAdapter({
-      client: new smQL(baseOrigin),
+      client: this.smqlClient,
       resources: this._buildResources(endpoint)
     });
   } else if (api) {
@@ -127,7 +136,11 @@ export default class DataEditor {
     this._loadResource()
       .then((success) => {
         if (success) {
-          this._render();
+          if (this.isCollection) {
+            this._renderCollection();
+          } else {
+            this._render();
+          }
         }
       })
       .catch((error) => {
@@ -166,9 +179,28 @@ export default class DataEditor {
 
   try {
     const response = await this.api.get(this.endpoint);
+
+    /*
+     * smQL already supports multiple-record responses through
+     * getData(response). DataEditor owns collection orchestration.
+     */
+    const collectionRecords = this._normalizeCollectionResponse(response);
+
+    if (collectionRecords !== null) {
+      this.isCollection = true;
+      this.records = collectionRecords;
+      this.record = {};
+      return true;
+    }
+
+    this.isCollection = false;
+    this.records = [];
+
     const record = this._normalizeResponse(response);
 
-    const hasMetadata = response.metadata && Object.keys(response.metadata.fields || {}).length > 0;
+    const hasMetadata =
+      response.metadata &&
+      Object.keys(response.metadata.fields || {}).length > 0;
 
     if (!hasMetadata) {
       Notification.show({
@@ -251,6 +283,139 @@ export default class DataEditor {
     }
 
     this.metadata = { fields: {} };
+  }
+
+  _normalizeCollectionResponse(response) {
+    if (!response || !this.smqlClient) {
+      return null;
+    }
+
+    if (typeof this.smqlClient.getData !== 'function') {
+      return null;
+    }
+
+    const records = this.smqlClient.getData(response);
+
+    console.log('[DataEditor] smQL getData():', records);
+    console.log(
+      '[DataEditor] smQL getData is array:',
+      Array.isArray(records)
+    );
+
+    if (!Array.isArray(records) || records.length === 0) {
+      return null;
+    }
+
+    const isCollection = records.every(
+      (record) =>
+        record &&
+        typeof record === 'object' &&
+        !Array.isArray(record) &&
+        !!record.id
+    );
+
+    return isCollection ? records : null;
+  }
+
+  _stripResponseMetadata(record) {
+    const cleanRecord = { ...(record || {}) };
+
+    delete cleanRecord.metadata;
+    delete cleanRecord._status;
+    delete cleanRecord._ok;
+
+    return cleanRecord;
+  }
+
+  _renderCollection() {
+    this._destroyChildEditors();
+
+    this.root.innerHTML = '';
+
+    const baseEndpoint =
+      this.collectionEndpoint || this.endpoint;
+
+    if (!baseEndpoint) {
+      Notification.show({
+        type: 'error',
+        message: 'No collection endpoint is available for collection records.'
+      });
+      return;
+    }
+
+    const collectionBase = String(baseEndpoint).replace(/\/$/, '');
+
+    for (const record of this.records) {
+      if (!record || !record.id) {
+        continue;
+      }
+
+      const recordRoot = document.createElement('div');
+
+      recordRoot.className = 'smq-data-editor-record';
+      recordRoot.dataset.recordId = String(record.id);
+
+      this.root.appendChild(recordRoot);
+
+      const childEndpoint =
+        `${collectionBase}/${encodeURIComponent(String(record.id))}`;
+
+      const childEditor = new DataEditor({
+        root: recordRoot,
+        metadata: record.metadata || {},
+        model: this.model,
+        recordId: record.id,
+        record: this._stripResponseMetadata(record),
+        endpoint: childEndpoint,
+        baseUrl: this.baseUrl,
+        registry: this.registry,
+        themeColor: this.themeColor,
+        editable: this.editable,
+        deletable: this.deletable,
+        permissions: this.permissions,
+        fieldMode: this.fieldMode,
+        layout: this.layout,
+        fields: this.fields,
+        excludeFields: this.excludeFields,
+        fieldLayout: this.fieldLayout,
+        onUpdated: this.onUpdated,
+        onDeleted: this.onDeleted,
+        onError: this.onError,
+        onCreated: this._onCreated
+      });
+
+      /*
+       * The parent already fetched this record.
+       * Calling mount() here would fetch it again.
+       *
+       * Render the normal single-record DataEditor directly.
+       */
+      childEditor._render();
+
+      this.childEditors.push(childEditor);
+    }
+  }
+
+  _destroyChildEditors() {
+    if (!Array.isArray(this.childEditors)) {
+      this.childEditors = [];
+      return;
+    }
+
+    for (const editor of this.childEditors) {
+      try {
+        if (editor && typeof editor.destroy === 'function') {
+          editor.destroy();
+        }
+      } catch (error) {
+        console.warn(
+          '[DataEditor] Failed to destroy collection child editor:',
+          error
+        );
+      }
+    }
+
+    this.childEditors = [];
   }
 
   _normalizeResponse(response) {
@@ -1656,6 +1821,7 @@ export default class DataEditor {
   }
 
   destroy() {
+    this._destroyChildEditors();
     this.boundElements.forEach((element) => {
       delete element.dataset.smqDataEditorBound;
     });
