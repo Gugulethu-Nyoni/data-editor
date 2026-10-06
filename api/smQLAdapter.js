@@ -12,7 +12,11 @@ export default class SmQLAdapter {
   }
 
   resolveResource(model) {
-    // If the resource is explicitly registered, use it
+    /*
+     * Explicit resources supplied by DataEditor are authoritative.
+     * Components own application API endpoints. Model-based endpoint
+     * derivation is only a fallback when no explicit resource exists.
+     */
     if (this.resources[model]) {
       return this.resources[model];
     }
