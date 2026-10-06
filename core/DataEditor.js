@@ -40,6 +40,9 @@ export default class DataEditor {
   this.baseUrl = baseUrl;
   this.collectionEndpoint = collectionEndpoint;
 
+  this.model = model;
+  this.recordId = recordId;
+
   this.isCollection = false;
   this.records = [];
   this.childEditors = [];
@@ -52,7 +55,10 @@ export default class DataEditor {
 
     this.api = new SmQLAdapter({
       client: this.smqlClient,
-      resources: this._buildResources(endpoint)
+      resources: this._buildResources(
+        endpoint,
+        collectionEndpoint
+      )
     });
   } else if (api) {
     this.api = api;
@@ -64,8 +70,6 @@ export default class DataEditor {
   this.themeColor = themeColor;
   this.editable = editable;
   this.deletable = deletable;
-  this.model = model;
-  this.recordId = recordId;
   this.record = record || {};
   this.permissions = permissions;
   this.fieldMode = fieldMode;
@@ -216,6 +220,8 @@ export default class DataEditor {
 
     if (hasRecord) {
       this.record = { ...record };
+      this.recordId = record.id;
+
       delete this.record.metadata;
       delete this.record._status;
       delete this.record._ok;
@@ -444,8 +450,32 @@ export default class DataEditor {
     }
   }
 
-  _buildResources(endpoint) {
-    if (!endpoint || !this.model || !this.recordId) {
+  _buildResources(endpoint, collectionEndpoint = null) {
+    if (!this.model) {
+      return {};
+    }
+
+    /*
+     * The component owns the API resource contract.
+     * An explicit collectionEndpoint is authoritative.
+     */
+    if (
+      collectionEndpoint &&
+      typeof collectionEndpoint === 'string' &&
+      collectionEndpoint.trim() !== ''
+    ) {
+      return {
+        [this.model]: {
+          endpoint: collectionEndpoint
+        }
+      };
+    }
+
+    /*
+     * Backwards-compatible fallback for components that only
+     * provide a record endpoint.
+     */
+    if (!endpoint || !this.recordId) {
       return {};
     }
 
@@ -464,7 +494,9 @@ export default class DataEditor {
     }
 
     return {
-      [this.model]: { endpoint: collection }
+      [this.model]: {
+        endpoint: collection
+      }
     };
   }
 
@@ -524,7 +556,10 @@ export default class DataEditor {
     const model = element.dataset.editorModel || element.dataset.model;
     const fieldName = element.dataset.editorFieldName || element.dataset.field;
     const relation = element.dataset.editorRelation;
-    const recordId = element.dataset.editorRecordId || element.dataset.recordId;
+    const recordId =
+      element.dataset.editorRecordId ||
+      element.dataset.recordId ||
+      this.recordId;
 
     if (!model || !fieldName) {
       console.warn('[DataEditor] Missing required attributes on field target:', element);
@@ -639,7 +674,7 @@ export default class DataEditor {
 
     const label = document.createElement('span');
     label.className = 'smq-data-editor-label';
-    label.textContent = field;
+    label.textContent = this._humanizeFieldName(field);
 
     const valueContainer = document.createElement('div');
     valueContainer.className = 'smq-data-editor-value';
@@ -667,6 +702,16 @@ export default class DataEditor {
     wrapper.appendChild(valueContainer);
 
     return wrapper;
+  }
+
+  _humanizeFieldName(field) {
+    return field
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\bId\b/g, 'ID')
+      .replace(/\bUrl\b/g, 'URL')
+      .replace(/\bApi\b/g, 'API')
+      .replace(/\bPdf\b/g, 'PDF')
+      .replace(/^./, char => char.toUpperCase());
   }
 
   _renderFields() {
@@ -782,7 +827,7 @@ export default class DataEditor {
 
         const label = document.createElement('span');
         label.className = 'smq-data-editor-label';
-        label.textContent = fieldName;
+        label.textContent = this._humanizeFieldName(fieldName);
 
         const valueContainer = document.createElement('div');
         valueContainer.className = 'smq-data-editor-value';
@@ -1141,7 +1186,11 @@ export default class DataEditor {
 
     const field = element.dataset.field || element.dataset.editorFieldName;
     const model = element.dataset.model || element.dataset.editorModel;
-    const recordId = element.dataset.recordId || element.dataset.editorRecordId || null;
+    const recordId =
+      element.dataset.recordId ||
+      element.dataset.editorRecordId ||
+      this.recordId ||
+      null;
     const relation = element.dataset.editorRelation;
 
     if (!model || !field) {
@@ -1339,7 +1388,11 @@ export default class DataEditor {
 
   async _commitElement(element, value, originalValue) {
     const model = element.dataset.model || element.dataset.editorModel;
-    const recordId = element.dataset.recordId || element.dataset.editorRecordId || null;
+    const recordId =
+      element.dataset.recordId ||
+      element.dataset.editorRecordId ||
+      this.recordId ||
+      null;
     const field = element.dataset.field || element.dataset.editorFieldName;
     const relation = element.dataset.editorRelation || null;
     const isNew = this._isNewRecord(recordId);
