@@ -6,6 +6,26 @@ import { Notification, smQL } from '@semantq/ql';
 import { showFieldStatus } from '../ui/FieldStatus.js';
 
 export default class DataEditor {
+  _inferParentContext(endpoint) {
+    if (typeof endpoint !== 'string') return null;
+
+    const match = endpoint.match(/(?:^|\/)resident\/([^/?#]+)\/?(?:[?#].*)?$/);
+    if (!match) return null;
+
+    let parentId;
+    try {
+      parentId = decodeURIComponent(match[1]);
+    } catch {
+      return null;
+    }
+
+    return {
+      parentModel: 'resident',
+      parentField: 'residentId',
+      parentId
+    };
+  }
+
   constructor({
   root = document,
   metadata = {},
@@ -37,6 +57,7 @@ export default class DataEditor {
   console.log('[DataEditor] Initial metadata:', this.metadata);
 
   this.endpoint = endpoint;
+    this.parentContext = this._inferParentContext(endpoint);
   this.baseUrl = baseUrl;
   this.collectionEndpoint = collectionEndpoint;
 
@@ -300,6 +321,15 @@ export default class DataEditor {
       return null;
     }
 
+    // A single-object response (no numeric keys) is a single record,
+    // not a collection. Route it to the single-record path.
+    // This prevents `getData` from stripping id/values from single-object
+    // responses (see @semantq/ql getData implementation).
+    const hasNumericKeys = Object.keys(response).some(k => /^\d+$/.test(k));
+    if (!hasNumericKeys) {
+      return null;
+    }
+
     const records = this.smqlClient.getData(response);
 
     console.log('[DataEditor] smQL getData():', records);
@@ -316,8 +346,7 @@ export default class DataEditor {
       (record) =>
         record &&
         typeof record === 'object' &&
-        !Array.isArray(record) &&
-        !!record.id
+        !Array.isArray(record)
     );
 
     return isCollection ? records : null;
@@ -333,74 +362,117 @@ export default class DataEditor {
     return cleanRecord;
   }
 
+
+  
+
   _renderCollection() {
-    this._destroyChildEditors();
+  this._destroyChildEditors();
 
-    this.root.innerHTML = '';
+  this.root.innerHTML = '';
 
-    const baseEndpoint =
-      this.collectionEndpoint || this.endpoint;
+  const baseEndpoint =
+    this.collectionEndpoint || this.endpoint;
 
-    if (!baseEndpoint) {
-      Notification.show({
-        type: 'error',
-        message: 'No collection endpoint is available for collection records.'
-      });
-      return;
-    }
-
-    const collectionBase = String(baseEndpoint).replace(/\/$/, '');
-
-    for (const record of this.records) {
-      if (!record || !record.id) {
-        continue;
-      }
-
-      const recordRoot = document.createElement('div');
-
-      recordRoot.className = 'smq-data-editor-record';
-      recordRoot.dataset.recordId = String(record.id);
-
-      this.root.appendChild(recordRoot);
-
-      const childEndpoint =
-        `${collectionBase}/${encodeURIComponent(String(record.id))}`;
-
-      const childEditor = new DataEditor({
-        root: recordRoot,
-        metadata: record.metadata || {},
-        model: this.model,
-        recordId: record.id,
-        record: this._stripResponseMetadata(record),
-        endpoint: childEndpoint,
-        baseUrl: this.baseUrl,
-        registry: this.registry,
-        themeColor: this.themeColor,
-        editable: this.editable,
-        deletable: this.deletable,
-        permissions: this.permissions,
-        fieldMode: this.fieldMode,
-        layout: this.layout,
-        fields: this.fields,
-        excludeFields: this.excludeFields,
-        fieldLayout: this.fieldLayout,
-        onUpdated: this.onUpdated,
-        onDeleted: this.onDeleted,
-        onError: this.onError,
-        onCreated: this._onCreated
-      });
-
-      /*
-       * The parent already fetched this record.
-       * Calling mount() here would fetch it again.
-       *
-       * Render the normal single-record DataEditor directly.
-       */
-      childEditor._render();
-
-      this.childEditors.push(childEditor);
-    }
+  if (!baseEndpoint) {
+    Notification.show({
+      type: 'error',
+      message: 'No collection endpoint is available for collection records.'
+    });
+    return;
   }
+
+  const collectionBase = String(baseEndpoint).replace(/\/$/, '');
+
+  for (const record of this.records) {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      continue;
+    }
+
+    const recordId = record.id || 'new-record';
+    const isNewRecord = recordId === 'new-record';
+
+    const recordRoot = document.createElement('div');
+
+    recordRoot.className = 'smq-data-editor-record';
+    recordRoot.dataset.recordId = String(recordId);
+
+    this.root.appendChild(recordRoot);
+
+    const childEndpoint = isNewRecord
+      ? collectionBase
+      : `${collectionBase}/${encodeURIComponent(String(recordId))}`;
+
+    const childEditor = new DataEditor({
+      root: recordRoot,
+      metadata: record.metadata || {},
+      model: this.model,
+      recordId: recordId,
+      record: this._stripResponseMetadata(record),
+      endpoint: childEndpoint,
+      collectionEndpoint: collectionBase,
+      baseUrl: this.baseUrl,
+      registry: this.registry,
+      themeColor: this.themeColor,
+      editable: this.editable,
+      deletable: this.deletable,
+      permissions: this.permissions,
+      fieldMode: this.fieldMode,
+      layout: this.layout,
+      fields: this.fields,
+      excludeFields: this.excludeFields,
+      fieldLayout: this.fieldLayout,
+      onUpdated: this.onUpdated,
+      onDeleted: this.onDeleted,
+      onError: this.onError,
+      onCreated: this._onCreated
+    });
+
+    /*
+     * Targeted mode requires per-record target containers.
+     *
+     * The parent's own target markup is cleared by the
+     * `this.root.innerHTML = ''` line above, so each child
+     * editor must be given its own targets before it renders.
+     *
+     * Section headings are derived from the target key using
+     * the same camelCase-to-Title-Case rule the library uses
+     * elsewhere (see _humanizeFieldName).
+     */
+    if (
+      childEditor.fieldMode === 'targeted' &&
+      childEditor.fieldLayout
+    ) {
+      for (const targetName of Object.keys(childEditor.fieldLayout)) {
+        const section = document.createElement('section');
+        section.className = 'data-editor-section';
+
+        const heading = document.createElement('h3');
+        heading.textContent = targetName
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .replace(/^./, char => char.toUpperCase());
+
+        const container = document.createElement('div');
+        container.dataset.editorTarget = targetName;
+
+        section.appendChild(heading);
+        section.appendChild(container);
+        recordRoot.appendChild(section);
+      }
+    }
+
+    /*
+     * The parent already fetched this record.
+     * Calling mount() here would fetch it again.
+     *
+     * Render the normal single-record DataEditor directly.
+     */
+    childEditor._render();
+
+    this.childEditors.push(childEditor);
+  }
+}
+
+
 
   _destroyChildEditors() {
     if (!Array.isArray(this.childEditors)) {
@@ -1525,6 +1597,15 @@ export default class DataEditor {
         delete createData.metadata;
         delete createData._status;
         delete createData._ok;
+
+        // Attach inferred parent context only to first-time child creation.
+                // Attach inferred parent context only to first-time child creation.
+        if (this.parentContext) {
+          const { parentField, parentId } = this.parentContext;
+          createData[parentField] = parentId;
+        }
+
+        
 
         const createPayload = {
           model,
