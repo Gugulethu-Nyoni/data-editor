@@ -22,6 +22,7 @@ import PredefinedKeyValueEditor
 import CustomKeyValueEditor
   from '../editors/structured/CustomKeyValueEditor.js';
 
+
 export default function createDefaultRegistry() {
   return new EditorRegistry().registerMany({
     text: StringEditor,
@@ -49,6 +50,6 @@ export default function createDefaultRegistry() {
 
     'comma-separated': CommaSeparatedEditor,
     'key-value': PredefinedKeyValueEditor,
-    'custom-key-value': CustomKeyValueEditor
+    'custom-key-value': CustomKeyValueEditor,
   });
 }
