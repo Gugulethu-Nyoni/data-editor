@@ -1,6 +1,7 @@
 import MetadataResolver from './MetadataResolver.js';
 import MutationManager from './MutationManager.js';
 import createDefaultRegistry from './createDefaultRegistry.js';
+import { parseTableValue, serializeTableValue } from '../editors/structured/TableEditor.js';
 import SmQLAdapter from '../api/smQLAdapter.js';
 import { Notification, smQL } from '@semantq/ql';
 import { showFieldStatus } from '../ui/FieldStatus.js';
@@ -763,7 +764,12 @@ export default class DataEditor {
     }
 
     const value = this.record[field];
-    element.textContent = this._formatDisplayValue(value, fieldMetadata);
+    if (fieldMetadata.editor === 'table' || fieldMetadata.structure?.type === 'table') {
+      element.dataset.tableRendered = 'true';
+      this._renderTableDisplay(element, value, fieldMetadata);
+    } else {
+      element.textContent = this._formatDisplayValue(value, fieldMetadata);
+    }
 
     if (this._canEditField(field, fieldMetadata)) {
       element.dataset.editable = 'true';
@@ -1160,6 +1166,11 @@ export default class DataEditor {
   _renderDisplayState(element, value, metadata = {}) {
     element.replaceChildren();
 
+    if (metadata.editor === 'table' || metadata.structure?.type === 'table') {
+      this._renderTableDisplay(element, value, metadata);
+      return;
+    }
+
     const isCustomKeyValue =
       metadata.editor === 'custom-key-value' ||
       metadata.structure?.type === 'custom-key-value';
@@ -1218,6 +1229,10 @@ export default class DataEditor {
 
       this.boundElements.add(element);
       element.dataset.smqDataEditorBound = 'true';
+
+      if (element.dataset.tableRendered === 'true') {
+        return;
+      }
 
       console.log('[DataEditor] Binding click:', {
         field: element.dataset.field,
@@ -1849,6 +1864,197 @@ export default class DataEditor {
     return null;
   }
 
+  _renderTableDisplay(element, value, metadata = {}) {
+    element.replaceChildren();
+    element.classList.add('smq-data-editor-table-host');
+    element.dataset.tableRendered = 'true';
+
+    const field = element.dataset.field;
+    const parsed = parseTableValue(value);
+
+    if (parsed.unsupported) {
+      const note = document.createElement('p');
+      note.className = 'smq-data-editor-table-unsupported';
+      note.textContent = 'This value is not a single-table JSON object. It is shown here read-only.';
+      element.appendChild(note);
+      return;
+    }
+
+    let headers = parsed.headers;
+    if (headers.length === 0) {
+      const declared = metadata?.structure?.columns;
+      if (Array.isArray(declared) && declared.length > 0) {
+        headers = declared.slice();
+      }
+    }
+
+    const title = parsed.title || 'Data';
+    const rows = parsed.rows.length > 0
+      ? parsed.rows.map(row => row.slice())
+      : [headers.map(() => '')];
+
+    const table = document.createElement('table');
+    table.className = 'smq-data-editor-table-el';
+
+    const caption = document.createElement('caption');
+    caption.className = 'smq-data-editor-table-caption';
+    caption.textContent = title;
+    table.appendChild(caption);
+
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    headers.forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      headerRow.appendChild(th);
+    });
+    const thActions = document.createElement('th');
+    thActions.className = 'smq-data-editor-table-actions-header';
+    headerRow.appendChild(thActions);
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+
+    const renderBody = () => {
+      tbody.replaceChildren();
+      rows.forEach((row, rowIdx) => {
+        const tr = document.createElement('tr');
+        headers.forEach((_, colIdx) => {
+          const td = document.createElement('td');
+          const span = document.createElement('span');
+          span.className = 'smq-data-editor-cell';
+          span.dataset.tableRow = String(rowIdx);
+          span.dataset.tableCol = String(colIdx);
+          span.dataset.tableField = field;
+          span.textContent = row[colIdx] ?? '';
+          td.appendChild(span);
+          tr.appendChild(td);
+        });
+        const tdActions = document.createElement('td');
+        tdActions.className = 'smq-data-editor-table-actions-cell';
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'smq-data-editor-table-delete-row';
+        del.textContent = '×';
+        del.setAttribute('aria-label', 'Delete row');
+        del.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const current = this.record[field];
+          const currentParsed = parseTableValue(current);
+          if (currentParsed.unsupported) return;
+          const newRows = currentParsed.rows.map(r => r.slice());
+          if (newRows.length <= 1) {
+            newRows[0] = currentParsed.headers.map(() => '');
+          } else {
+            newRows.splice(rowIdx, 1);
+          }
+          const newValue = serializeTableValue(currentParsed.title || title, currentParsed.headers.length ? currentParsed.headers : headers, newRows);
+          this._commitElement(element, newValue, current);
+        });
+        tdActions.appendChild(del);
+        tr.appendChild(tdActions);
+        tbody.appendChild(tr);
+      });
+    };
+
+    renderBody();
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'smq-data-editor-table-add-row';
+    addBtn.textContent = '+ Add row';
+    addBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const current = this.record[field];
+      const currentParsed = parseTableValue(current);
+      if (currentParsed.unsupported) return;
+      const newRows = currentParsed.rows.map(r => r.slice());
+      const cols = currentParsed.headers.length ? currentParsed.headers : headers;
+      newRows.push(cols.map(() => ''));
+      const newValue = serializeTableValue(currentParsed.title || title, cols, newRows);
+      this._commitElement(element, newValue, current);
+    });
+
+    element.appendChild(table);
+    element.appendChild(addBtn);
+
+    this._bindTableCells(element);
+  }
+
+  _bindTableCells(element) {
+    const field = element.dataset.field;
+    if (!field) return;
+    const cells = element.querySelectorAll('.smq-data-editor-cell');
+    cells.forEach(cell => {
+      if (cell.dataset.cellBound === 'true') return;
+      cell.dataset.cellBound = 'true';
+      cell.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this._editTableCell(element, cell);
+      });
+    });
+  }
+
+  _editTableCell(fieldElement, cell) {
+    if (cell.dataset.editing === 'true') return;
+    const field = fieldElement.dataset.field;
+    const rowIdx = Number(cell.dataset.tableRow);
+    const colIdx = Number(cell.dataset.tableCol);
+    const current = this.record[field];
+    const parsed = parseTableValue(current);
+    if (parsed.unsupported) return;
+    const headers = parsed.headers.length ? parsed.headers : (fieldElement.dataset.tableColumns ? JSON.parse(fieldElement.dataset.tableColumns) : []);
+    const colName = headers[colIdx];
+    if (!colName) return;
+    const originalCell = cell.textContent;
+
+    const StringEditor = this.registry.resolve('text');
+    if (!StringEditor) {
+      console.error('[DataEditor] StringEditor not registered.');
+      return;
+    }
+
+    cell.dataset.editing = 'true';
+    cell.textContent = '';
+
+    const editor = new StringEditor({
+      value: originalCell,
+      metadata: parsed.unsupported ? {} : {},
+      registry: this.registry,
+      onCommit: (value) => {
+        const currentNow = this.record[field];
+        const parsedNow = parseTableValue(currentNow);
+        if (parsedNow.unsupported) {
+          cell.textContent = originalCell;
+          cell.dataset.editing = 'false';
+          return;
+        }
+        const newRows = parsedNow.rows.map(r => r.slice());
+        while (newRows.length <= rowIdx) {
+          newRows.push(parsedNow.headers.map(() => ''));
+        }
+        newRows[rowIdx][colIdx] = value == null ? '' : String(value);
+        const newValue = serializeTableValue(parsedNow.title, parsedNow.headers, newRows);
+        cell.dataset.editing = 'false';
+        cell.textContent = value == null ? '' : String(value);
+        this._commitElement(fieldElement, newValue, currentNow);
+      },
+      onCancel: () => {
+        cell.textContent = originalCell;
+        cell.dataset.editing = 'false';
+      }
+    });
+
+    const editorElement = editor.render();
+    cell.appendChild(editorElement);
+    editor.focus?.();
+  }
+
   _formatDisplayValue(value, fieldMetadata = {}) {
     if (value == null) {
       return '';
@@ -1874,6 +2080,15 @@ export default class DataEditor {
       return Object.keys(fields)
         .map((key) => `${key}: ${values[key] ?? ''}`)
         .join(', ');
+    }
+
+    if (fieldMetadata?.editor === 'table' || fieldMetadata?.structure?.type === 'table') {
+      const outerKey = value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value)[0] : null;
+      if (!outerKey) return '';
+      const columns = fieldMetadata?.structure?.columns || Object.keys(value[outerKey] || {});
+      const firstColumn = columns[0];
+      const rowCount = firstColumn && Array.isArray(value[outerKey]?.[firstColumn]) ? value[outerKey][firstColumn].length : 0;
+      return `${outerKey} \u00b7 ${rowCount} row${rowCount === 1 ? '' : 's'}`;
     }
 
     if (typeof value === 'object') {
