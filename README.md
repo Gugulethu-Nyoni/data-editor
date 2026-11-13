@@ -1,5 +1,5 @@
 # @semantq/data-editor
-Update read me for table editor
+Update read me for table editor and finalise
 
 A metadata-driven, inline data editor for Semantq applications.
 
